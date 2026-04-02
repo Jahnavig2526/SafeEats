@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SafeEats | Allergen-Aware Dining</title>
+    <meta
+      name="description"
+      content="SafeEats helps people with food allergies discover safer dishes using AI-powered menu analysis and personalized risk scoring."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-1" aria-hidden="true"></div>
+    <div class="bg-orb orb-2" aria-hidden="true"></div>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <nav class="nav shell">
+        <a class="brand" href="#home" aria-label="SafeEats home">
+          <span class="brand-mark" aria-hidden="true">SE</span>
+          <span class="brand-text">SafeEats</span>
+        </a>
+        <button class="menu-btn" id="menuBtn" aria-expanded="false" aria-controls="navLinks">
+          Menu
+        </button>
+        <ul class="nav-links" id="navLinks">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#risk">Risk score</a></li>
+          <li><a href="#download">Download</a></li>
+        </ul>
+        <a class="btn btn-primary nav-cta" href="#download">Get Early Access</a>
+      </nav>
+    </header>
+
+    <main id="home">
+      <section class="hero shell reveal">
+        <div class="hero-copy">
+          <p class="eyebrow">AI-POWERED FOOD SAFETY</p>
+          <h1>
+            Dine with confidence,
+            <span>not uncertainty.</span>
+          </h1>
+          <p class="hero-sub">
+            SafeEats scans menus, detects hidden allergens, and gives a personalized risk score based on your sensitivity profile.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#download">Start Free</a>
+            <a class="btn btn-ghost" href="#features">Explore Platform</a>
+          </div>
+          <div class="hero-stats">
+            <div>
+              <strong>2.1M+</strong>
+              <span>Menu items analyzed</span>
+            </div>
+            <div>
+              <strong>97.4%</strong>
+              <span>Allergen extraction precision</span>
+            </div>
+            <div>
+              <strong>420+</strong>
+              <span>Partner restaurants</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-panel" aria-label="Sample menu analysis">
+          <div class="panel-head">
+            <p>Tonight at Basil & Fire</p>
+            <span class="chip live">Live menu</span>
+          </div>
+          <article class="menu-card safe">
+            <h3>Roasted Veggie Bowl</h3>
+            <p>Quinoa, chickpeas, lemon tahini</p>
+            <div class="card-foot">
+              <span class="chip">Safe for you</span>
+              <strong>Risk 8%</strong>
+            </div>
+          </article>
+          <article class="menu-card caution">
+            <h3>Truffle Mushroom Pasta</h3>
+            <p>Cream base, parmesan, butter finish</p>
+            <div class="card-foot">
+              <span class="chip">Contains milk</span>
+              <strong>Risk 81%</strong>
+            </div>
+          </article>
+          <article class="menu-card review">
+            <h3>House Fries</h3>
+            <p>Shared fryer noted in kitchen policy</p>
+            <div class="card-foot">
+              <span class="chip">Cross-contact risk</span>
+              <strong>Needs review</strong>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="feature-section shell" id="features">
+        <div class="section-top reveal">
+          <p class="eyebrow">WHY SAFEEATS</p>
+          <h2>Built for real-world allergy decisions</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card reveal">
+            <h3>Personal allergy profile</h3>
+            <p>Set strictness for each allergen from avoid-traces to flexible tolerance.</p>
+          </article>
+          <article class="feature-card reveal">
+            <h3>Dynamic risk score</h3>
+            <p>See probability-based confidence from ingredient clarity and restaurant history.</p>
+          </article>
+          <article class="feature-card reveal">
+            <h3>Smart substitutions</h3>
+            <p>Get safer alternatives and chef-friendly modification suggestions in one tap.</p>
+          </article>
+          <article class="feature-card reveal">
+            <h3>Community verification</h3>
+            <p>Trust weighted reports from diners and restaurant staff for higher reliability.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="steps shell" id="how">
+        <div class="section-top reveal">
+          <p class="eyebrow">HOW IT WORKS</p>
+          <h2>From menu scan to safe choice in seconds</h2>
+        </div>
+        <ol class="step-list">
+          <li class="step reveal">
+            <span>1</span>
+            <div>
+              <h3>Build your profile</h3>
+              <p>Pick allergens, sensitivity, and dietary preferences.</p>
+            </div>
+          </li>
+          <li class="step reveal">
+            <span>2</span>
+            <div>
+              <h3>Scan or import menu</h3>
+              <p>Use camera OCR, partner feeds, or uploaded menus.</p>
+            </div>
+          </li>
+          <li class="step reveal">
+            <span>3</span>
+            <div>
+              <h3>Review confidence score</h3>
+              <p>Each dish gets safe, caution, or uncertain status with explainability.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="risk-section shell" id="risk">
+        <div class="risk-card reveal">
+          <div>
+            <p class="eyebrow">INTERACTIVE DEMO</p>
+            <h2>Try personalized sensitivity tuning</h2>
+            <p>
+              Move the slider to simulate strictness. Watch how your acceptable risk threshold changes.
+            </p>
+          </div>
+          <div class="risk-control">
+            <label for="sensitivity">Sensitivity level: <strong id="sensitivityValue">3</strong>/5</label>
+            <input id="sensitivity" type="range" min="1" max="5" step="1" value="3" />
+            <p class="risk-output" id="riskOutput">Suggested max dish risk: 35%</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta shell" id="download">
+        <div class="cta-card reveal">
+          <h2>Join the beta and make every meal safer</h2>
+          <p>Get early access to SafeEats mobile, restaurant insights, and AI-powered menu scanning.</p>
+          <form class="cta-form" id="waitlistForm">
+            <label class="sr-only" for="email">Email address</label>
+            <input id="email" type="email" placeholder="Enter your email" required />
+            <button class="btn btn-primary" type="submit">Join Waitlist</button>
+          </form>
+          <p class="form-note" id="formNote" aria-live="polite"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer shell">
+      <p>SafeEats © 2026. Always verify with restaurant staff before ordering.</p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
