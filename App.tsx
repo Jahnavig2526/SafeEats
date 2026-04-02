@@ -35,7 +35,16 @@ export default function App() {
       case 'feedback':
         return <FeedbackScreen />
       case 'profile':
-        return <ProfileScreen profile={profile} />
+        return (
+          <ProfileScreen
+            profile={profile}
+            onProfileUpdate={(updates) => {
+              if (profile) {
+                setProfile({ ...profile, ...updates })
+              }
+            }}
+          />
+        )
       default:
         return <HomeScreen />
     }
