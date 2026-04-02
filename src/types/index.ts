@@ -1,4 +1,4 @@
-export type TabKey = 'home' | 'restaurant' | 'scan' | 'feedback' | 'profile'
+export type TabKey = 'home' | 'restaurant' | 'scan' | 'profile' | 'settings'
 
 export type SafetyStatus = 'safe' | 'unsafe' | 'uncertain'
 
@@ -19,6 +19,7 @@ export type MenuItem = {
   id: string
   name: string
   description: string
+  image: string
   status: SafetyStatus
 }
 

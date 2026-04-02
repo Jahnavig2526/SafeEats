@@ -1,6 +1,9 @@
 import { Feather } from '@expo/vector-icons'
-import { useState } from 'react'
+import * as Location from 'expo-location'
+import { useEffect, useMemo, useState } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { restaurants } from '../data/mockData'
+import { calculateDistance, formatDistance } from '../lib/geolocation'
 
 const restaurantItems = [
   {
@@ -47,118 +50,215 @@ const restaurantItems = [
 
 const categoryFilters = ['Fast food', 'European', 'Italian', 'Mexican', 'Japanese', 'French']
 
-export function RestaurantScreen() {
+type RestaurantScreenProps = {
+  theme: {
+    background: string
+    surface: string
+    surfaceSoft: string
+    text: string
+    muted: string
+    accent: string
+    border: string
+  }
+}
+
+export function RestaurantScreen({ theme }: RestaurantScreenProps) {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
   const activeCategory = 'Italian'
   const activeRatings = [3, 4]
 
+  const colors = useMemo(() => {
+    const isLight = theme.background.toLowerCase().startsWith('#f')
+
+    return {
+      pageBg: theme.background,
+      cardBg: theme.surface,
+      softBg: theme.surfaceSoft,
+      text: theme.text,
+      muted: theme.muted,
+      accent: theme.accent,
+      border: theme.border,
+      inputPlaceholder: isLight ? '#8a93a0' : '#9ca3af',
+      overlay: isLight ? 'rgba(17, 24, 39, 0.38)' : 'rgba(2, 6, 23, 0.62)',
+    }
+  }, [theme])
+
+  useEffect(() => {
+    const requestLocation = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status !== 'granted') {
+          setLocationError('Location permission denied. Showing closest known places.')
+          setUserLocation({ latitude: 40.7505, longitude: -73.9972 })
+          return
+        }
+
+        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        })
+      } catch {
+        setLocationError('Unable to read location. Showing closest known places.')
+        setUserLocation({ latitude: 40.7505, longitude: -73.9972 })
+      }
+    }
+
+    requestLocation()
+  }, [])
+
+  const nearbyRestaurants = useMemo(() => {
+    if (!userLocation) {
+      return []
+    }
+
+    return restaurants
+      .map((restaurant) => ({
+        ...restaurant,
+        distance: calculateDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          restaurant.latitude,
+          restaurant.longitude
+        ),
+      }))
+      .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
+      .slice(0, 5)
+  }, [userLocation])
+
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <View style={[styles.screen, { backgroundColor: colors.pageBg }]}>
+      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.pageBg }]} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
-          <Pressable style={styles.iconButton}>
-            <Feather name="chevron-left" size={18} color="#1f2937" />
+          <Pressable style={[styles.iconButton, { borderColor: colors.border, backgroundColor: colors.softBg }]}>
+            <Feather name="chevron-left" size={18} color={colors.text} />
           </Pressable>
-          <Text style={styles.headerTitle}>List of restaurants</Text>
-          <Pressable style={styles.iconButton}>
-            <Feather name="heart" size={17} color="#1f2937" />
+          <Text style={[styles.headerTitle, { color: colors.text }]}>List of restaurants</Text>
+          <Pressable style={[styles.iconButton, { borderColor: colors.border, backgroundColor: colors.softBg }]}>
+            <Feather name="heart" size={17} color={colors.text} />
           </Pressable>
         </View>
 
         <View style={styles.searchRow}>
-          <View style={styles.searchBox}>
-            <Feather name="search" size={18} color="#fb5b24" />
+          <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.softBg }]}>
+            <Feather name="search" size={18} color={colors.accent} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: colors.text }]}
               placeholder="Restaurant name or dish..."
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.inputPlaceholder}
             />
           </View>
-          <Pressable style={styles.filterButton} onPress={() => setIsFilterOpen(true)}>
+          <Pressable style={[styles.filterButton, { backgroundColor: colors.accent }]} onPress={() => setIsFilterOpen(true)}>
             <Feather name="sliders" size={16} color="#ffffff" />
           </Pressable>
         </View>
 
         {restaurantItems.map((item) => (
-          <View key={item.id} style={styles.itemCard}>
+          <View key={item.id} style={[styles.itemCard, { borderColor: colors.border, backgroundColor: colors.cardBg }]}> 
             <Image source={{ uri: item.image }} style={styles.itemImage} />
             <View style={styles.itemBody}>
               <View style={styles.itemTopRow}>
-                <Text style={styles.itemName}>{item.name}</Text>
+                <Text style={[styles.itemName, { color: colors.text }]}>{item.name}</Text>
                 <View style={styles.ratingWrap}>
                   <Feather name="star" size={13} color="#f59e0b" />
-                  <Text style={styles.ratingText}>{item.rating}</Text>
+                  <Text style={[styles.ratingText, { color: colors.muted }]}>{item.rating}</Text>
                 </View>
               </View>
               <View style={styles.addressRow}>
-                <Feather name="map-pin" size={11} color="#fb5b24" />
-                <Text style={styles.itemAddress}>{item.address}</Text>
+                <Feather name="map-pin" size={11} color={colors.accent} />
+                <Text style={[styles.itemAddress, { color: colors.muted }]}>{item.address}</Text>
               </View>
             </View>
           </View>
         ))}
+
+        <View style={styles.bottomSection}>
+          <Text style={[styles.bottomSectionTitle, { color: colors.text }]}>Nearby Restaurants</Text>
+          {locationError ? <Text style={[styles.locationHint, { color: colors.accent }]}>{locationError}</Text> : null}
+
+          {nearbyRestaurants.length > 0 ? (
+            nearbyRestaurants.map((restaurant) => (
+              <View key={`nearby-${restaurant.id}`} style={[styles.nearbyCard, { borderColor: colors.border, backgroundColor: colors.cardBg }]}> 
+                <Image source={{ uri: restaurant.image }} style={styles.nearbyImage} />
+                <View style={styles.nearbyBody}>
+                  <Text style={[styles.nearbyName, { color: colors.text }]}>{restaurant.name}</Text>
+                  <Text style={[styles.nearbyAddress, { color: colors.muted }]} numberOfLines={1}>
+                    {restaurant.address}
+                  </Text>
+                </View>
+                <View style={[styles.nearbyDistanceBadge, { borderColor: colors.border, backgroundColor: colors.softBg }]}>
+                  <Text style={[styles.nearbyDistanceText, { color: colors.accent }]}>{restaurant.distance !== undefined ? formatDistance(restaurant.distance) : 'Near'}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={[styles.locationHint, { color: colors.muted }]}>Detecting location for nearby restaurants...</Text>
+          )}
+        </View>
       </ScrollView>
 
       {isFilterOpen && (
-        <View style={styles.filterOverlay}>
+        <View style={[styles.filterOverlay, { backgroundColor: colors.overlay }]}>
           <Pressable style={styles.overlayDismissArea} onPress={() => setIsFilterOpen(false)} />
-          <View style={styles.filterSheet}>
-            <View style={styles.sheetHandle} />
+          <View style={[styles.filterSheet, { backgroundColor: colors.cardBg }]}> 
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
 
             <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Filter</Text>
+              <Text style={[styles.filterTitle, { color: colors.text }]}>Filter</Text>
               <Pressable onPress={() => setIsFilterOpen(false)}>
-                <Text style={styles.resetText}>Reset</Text>
+                <Text style={[styles.resetText, { color: colors.muted }]}>Reset</Text>
               </Pressable>
             </View>
 
-            <Text style={styles.filterSectionLabel}>Categories</Text>
+            <Text style={[styles.filterSectionLabel, { color: colors.text }]}>Categories</Text>
             <View style={styles.filterChips}>
               {categoryFilters.map((category) => {
                 const isActive = category === activeCategory
                 return (
-                  <View key={category} style={[styles.filterChip, isActive && styles.filterChipActive]}>
-                    <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{category}</Text>
+                  <View key={category} style={[styles.filterChip, { borderColor: colors.border, backgroundColor: colors.softBg }, isActive && [styles.filterChipActive, { backgroundColor: colors.accent, borderColor: colors.accent }]]}>
+                    <Text style={[styles.filterChipText, { color: colors.text }, isActive && styles.filterChipTextActive]}>{category}</Text>
                   </View>
                 )
               })}
             </View>
 
-            <View style={styles.sectionDivider} />
+            <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
             <View style={styles.distanceTitleRow}>
-              <Text style={styles.filterSectionLabel}>Distance to me</Text>
+              <Text style={[styles.filterSectionLabel, { color: colors.text }]}>Distance to me</Text>
               <View style={styles.distanceControls}>
-                <View style={styles.stepButton}>
-                  <Feather name="minus" size={14} color="#9ca3af" />
+                <View style={[styles.stepButton, { borderColor: colors.border, backgroundColor: colors.softBg }]}>
+                  <Feather name="minus" size={14} color={colors.muted} />
                 </View>
-                <Text style={styles.distanceValue}>2 km</Text>
-                <View style={styles.stepButton}>
-                  <Feather name="plus" size={14} color="#9ca3af" />
+                <Text style={[styles.distanceValue, { color: colors.accent }]}>2 km</Text>
+                <View style={[styles.stepButton, { borderColor: colors.border, backgroundColor: colors.softBg }]}>
+                  <Feather name="plus" size={14} color={colors.muted} />
                 </View>
               </View>
             </View>
 
-            <View style={styles.sectionDivider} />
+            <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
-            <Text style={styles.filterSectionLabel}>Rating</Text>
+            <Text style={[styles.filterSectionLabel, { color: colors.text }]}>Rating</Text>
             <View style={styles.ratingChips}>
               {[1, 2, 3, 4, 5].map((value) => {
                 const isActive = activeRatings.includes(value)
                 return (
-                  <View key={value} style={[styles.ratingChip, isActive && styles.ratingChipActive]}>
-                    <Text style={[styles.ratingChipText, isActive && styles.ratingChipTextActive]}>{value}</Text>
+                  <View key={value} style={[styles.ratingChip, { borderColor: colors.border, backgroundColor: colors.softBg }, isActive && [styles.ratingChipActive, { backgroundColor: colors.accent, borderColor: colors.accent }]]}>
+                    <Text style={[styles.ratingChipText, { color: colors.text }, isActive && styles.ratingChipTextActive]}>{value}</Text>
                     <Feather name="star" size={10} color={isActive ? '#ffffff' : '#f59e0b'} />
                   </View>
                 )
               })}
             </View>
 
-            <View style={styles.sectionDivider} />
+            <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
             <View style={styles.priceHeader}>
-              <Text style={styles.filterSectionLabel}>Price</Text>
-              <Text style={styles.priceRange}>$70-$125</Text>
+              <Text style={[styles.filterSectionLabel, { color: colors.text }]}>Price</Text>
+              <Text style={[styles.priceRange, { color: colors.accent }]}>$70-$125</Text>
             </View>
 
             <View style={styles.sliderWrap}>
@@ -291,6 +391,61 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontSize: 10,
     flex: 1,
+  },
+  bottomSection: {
+    marginTop: 10,
+    gap: 8,
+  },
+  bottomSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  locationHint: {
+    color: '#b45309',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  nearbyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f8fafc',
+    padding: 9,
+  },
+  nearbyImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+  },
+  nearbyBody: {
+    flex: 1,
+    gap: 4,
+  },
+  nearbyName: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  nearbyAddress: {
+    color: '#9ca3af',
+    fontSize: 10,
+  },
+  nearbyDistanceBadge: {
+    borderRadius: 999,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  nearbyDistanceText: {
+    color: '#166534',
+    fontSize: 11,
+    fontWeight: '700',
   },
   filterOverlay: {
     ...StyleSheet.absoluteFillObject,

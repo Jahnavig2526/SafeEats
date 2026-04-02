@@ -71,9 +71,18 @@ const barcodeToFoodId: Record<string, string> = {
 
 type ScanScreenProps = {
   profile: UserIntakeProfile | null
+  theme: {
+    background: string
+    surface: string
+    surfaceSoft: string
+    text: string
+    muted: string
+    accent: string
+    border: string
+  }
 }
 
-export function ScanScreen({ profile }: ScanScreenProps) {
+export function ScanScreen({ profile, theme }: ScanScreenProps) {
   const [permission, requestPermission] = useCameraPermissions()
   const [cameraOpen, setCameraOpen] = useState(false)
   const [hasScanned, setHasScanned] = useState(false)
@@ -81,6 +90,24 @@ export function ScanScreen({ profile }: ScanScreenProps) {
   const [scannedFood, setScannedFood] = useState<FoodItem | null>(null)
   const [searchText, setSearchText] = useState('')
   const [showResults, setShowResults] = useState(false)
+
+  const colors = useMemo(() => {
+    const isLight = theme.background.toLowerCase().startsWith('#f')
+
+    return {
+      pageBg: theme.background,
+      cardBg: theme.surface,
+      softBg: theme.surfaceSoft,
+      text: theme.text,
+      muted: theme.muted,
+      accent: theme.accent,
+      border: theme.border,
+      inputPlaceholder: isLight ? '#8a93a0' : '#9ca3af',
+      resultBorder: isLight ? '#e2e8f0' : theme.border,
+      cameraOverlay: isLight ? 'rgba(15, 23, 42, 0.4)' : 'rgba(2, 6, 23, 0.62)',
+      cameraButtonBg: isLight ? 'rgba(15, 23, 42, 0.82)' : 'rgba(15, 23, 42, 0.75)',
+    }
+  }, [theme])
 
   const userAllergies = useMemo(() => profile?.allergies?.map((a) => a.trim().toLowerCase()) ?? [], [profile])
 
@@ -166,7 +193,7 @@ export function ScanScreen({ profile }: ScanScreenProps) {
 
   if (cameraOpen) {
     return (
-      <View style={styles.cameraScreen}>
+      <View style={[styles.cameraScreen, { backgroundColor: colors.pageBg }]}>
         <CameraView
           style={styles.camera}
           facing="back"
@@ -176,16 +203,16 @@ export function ScanScreen({ profile }: ScanScreenProps) {
           onBarcodeScanned={handleBarcodeScanned}
         />
 
-        <View style={styles.cameraOverlay}>
-          <View style={styles.scanFrame} />
-          <Text style={styles.cameraHint}>Align the product barcode inside the box</Text>
+        <View style={[styles.cameraOverlay, { backgroundColor: colors.cameraOverlay }]}>
+          <View style={[styles.scanFrame, { borderColor: colors.text }]} />
+          <Text style={[styles.cameraHint, { color: colors.text }]}>Align the product barcode inside the box</Text>
 
           <View style={styles.cameraActions}>
-            <Pressable style={styles.cameraActionBtn} onPress={() => setCameraOpen(false)}>
+            <Pressable style={[styles.cameraActionBtn, { backgroundColor: colors.cameraButtonBg }]} onPress={() => setCameraOpen(false)}>
               <Feather name="x" size={18} color="#ffffff" />
               <Text style={styles.cameraActionText}>Close</Text>
             </Pressable>
-            <Pressable style={styles.cameraActionBtn} onPress={() => setHasScanned(false)}>
+            <Pressable style={[styles.cameraActionBtn, { backgroundColor: colors.cameraButtonBg }]} onPress={() => setHasScanned(false)}>
               <Feather name="refresh-cw" size={18} color="#ffffff" />
               <Text style={styles.cameraActionText}>Rescan</Text>
             </Pressable>
@@ -201,12 +228,12 @@ export function ScanScreen({ profile }: ScanScreenProps) {
     const isUnsafe = safetyCheck.status === 'unsafe'
 
     return (
-      <ScrollView contentContainerStyle={styles.resultContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.resultCard}>
+      <ScrollView contentContainerStyle={[styles.resultContainer, { backgroundColor: colors.pageBg }]} showsVerticalScrollIndicator={false}>
+        <View style={[styles.resultCard, { backgroundColor: colors.cardBg, borderColor: colors.resultBorder }]}>
           <Image source={{ uri: scannedFood.image }} style={styles.resultImage} />
 
           <View style={styles.resultHeader}>
-            <Text style={styles.resultTitle}>{scannedFood.name}</Text>
+            <Text style={[styles.resultTitle, { color: colors.text }]}>{scannedFood.name}</Text>
             <View
               style={[
                 styles.statusBadge,
@@ -222,25 +249,25 @@ export function ScanScreen({ profile }: ScanScreenProps) {
             </View>
           </View>
 
-          <Text style={styles.description}>{scannedFood.description}</Text>
-          {!!lastBarcode && <Text style={styles.barcodeText}>Barcode: {lastBarcode}</Text>}
+          <Text style={[styles.description, { color: colors.muted }]}>{scannedFood.description}</Text>
+          {!!lastBarcode && <Text style={[styles.barcodeText, { color: colors.text }]}>Barcode: {lastBarcode}</Text>}
 
           {safetyCheck.conflicts.length > 0 && (
             <View style={[styles.conflictBox, isUnsafe ? styles.conflictBoxUnsafe : styles.conflictBoxUncertain]}>
-              <Text style={styles.conflictTitle}>{isUnsafe ? 'Allergens Found:' : 'Potential Issues:'}</Text>
+              <Text style={[styles.conflictTitle, { color: colors.text }]}>{isUnsafe ? 'Allergens Found:' : 'Potential Issues:'}</Text>
               {safetyCheck.conflicts.map((conflict) => (
-                <Text key={conflict} style={styles.conflictItem}>- {conflict}</Text>
+                <Text key={conflict} style={[styles.conflictItem, { color: colors.muted }]}>- {conflict}</Text>
               ))}
             </View>
           )}
 
-          <Pressable style={styles.scanAgainButton} onPress={openCameraScanner}>
+          <Pressable style={[styles.scanAgainButton, { backgroundColor: colors.accent }]} onPress={openCameraScanner}>
             <Feather name="camera" size={16} color="#ffffff" />
             <Text style={styles.scanAgainButtonText}>Scan Next Item</Text>
           </Pressable>
 
-          <Pressable style={styles.secondaryButton} onPress={resetScan}>
-            <Text style={styles.secondaryButtonText}>Back To Scan List</Text>
+          <Pressable style={[styles.secondaryButton, { borderColor: colors.border }]} onPress={resetScan}>
+            <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Back To Scan List</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -248,49 +275,49 @@ export function ScanScreen({ profile }: ScanScreenProps) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.pageBg }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Feather name="camera" size={32} color="#fb5b24" />
-          <Text style={styles.title}>Scan Food Item</Text>
-          <Text style={styles.subtitle}>Scan product barcode and check if it is safe for your profile</Text>
+          <Feather name="camera" size={32} color={colors.accent} />
+          <Text style={[styles.title, { color: colors.text }]}>Scan Food Item</Text>
+          <Text style={[styles.subtitle, { color: colors.muted }]}>Scan product barcode and check if it is safe for your profile</Text>
         </View>
 
-        <Pressable style={styles.primaryScanBtn} onPress={openCameraScanner}>
+        <Pressable style={[styles.primaryScanBtn, { backgroundColor: colors.accent }]} onPress={openCameraScanner}>
           <Feather name="camera" size={18} color="#ffffff" />
           <Text style={styles.primaryScanText}>Open Camera Scanner</Text>
         </Pressable>
 
         <View style={styles.searchSection}>
-          <View style={styles.searchBox}>
-            <Feather name="search" size={16} color="#fb5b24" />
+          <View style={[styles.searchBox, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <Feather name="search" size={16} color={colors.accent} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: colors.text }]}
               placeholder="Search food by name"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.inputPlaceholder}
               value={searchText}
               onChangeText={setSearchText}
             />
           </View>
-          <Pressable style={styles.searchButton} onPress={handleSearchScan} disabled={!searchText}>
+          <Pressable style={[styles.searchButton, { backgroundColor: colors.accent }]} onPress={handleSearchScan} disabled={!searchText}>
             <Feather name="arrow-right" size={16} color="#ffffff" />
           </Pressable>
         </View>
 
-        <Text style={styles.sectionLabel}>Sample Items</Text>
+        <Text style={[styles.sectionLabel, { color: colors.text }]}>Sample Items</Text>
         <View style={styles.foodGrid}>
           {foodDatabase.map((food) => {
             const safety = checkFoodSafety(food)
             const color = safety.status === 'safe' ? '#22c55e' : safety.status === 'unsafe' ? '#ef4444' : '#eab308'
 
             return (
-              <Pressable key={food.id} style={styles.foodCard} onPress={() => handleScanFood(food)}>
+              <Pressable key={food.id} style={[styles.foodCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]} onPress={() => handleScanFood(food)}>
                 <Image source={{ uri: food.image }} style={styles.foodImage} />
                 <View style={[styles.safetyIndicator, { backgroundColor: color }]}>
                   <Feather name={safety.status === 'safe' ? 'check' : safety.status === 'unsafe' ? 'x' : 'alert-circle'} size={12} color="#fff" />
                 </View>
-                <Text style={styles.foodName}>{food.name}</Text>
-                <Text style={styles.foodStatus}>{safety.status.toUpperCase()}</Text>
+                <Text style={[styles.foodName, { color: colors.text }]}>{food.name}</Text>
+                <Text style={[styles.foodStatus, { color: colors.muted }]}>{safety.status.toUpperCase()}</Text>
               </Pressable>
             )
           })}

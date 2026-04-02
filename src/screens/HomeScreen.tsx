@@ -1,23 +1,51 @@
 import { Feather } from '@expo/vector-icons'
 import * as Location from 'expo-location'
 import { useEffect, useMemo, useState } from 'react'
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { restaurants, menuItems } from '../data/mockData'
 import { calculateDistance, formatDistance } from '../lib/geolocation'
+import type { ThemeKey } from '../lib/preferences'
 import type { Restaurant } from '../types'
 
 const categories = ['All', 'Vegan', 'Drinks', 'Healthy food', 'Italian', 'Asian']
 
-export function HomeScreen() {
-  const [searchQuery, setSearchQuery] = useState('')
+type HomeScreenProps = {
+  theme: {
+    background: string
+    surface: string
+    surfaceSoft: string
+    text: string
+    muted: string
+    accent: string
+    border: string
+  }
+  activeTheme: ThemeKey
+  onQuickThemeChange: (theme: ThemeKey) => void
+}
+
+export function HomeScreen({ theme, activeTheme, onQuickThemeChange }: HomeScreenProps) {
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [favorites, setFavorites] = useState<string[]>([])
   const [cart, setCart] = useState<Array<{ itemId: string; name: string; price: string; quantity: number }>>([])
-  const [showFilterModal, setShowFilterModal] = useState(false)
-  const [minRating, setMinRating] = useState(0)
+  const minRating = 0
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
-  const [maxDistance, setMaxDistance] = useState(15) // in kilometers
+  const maxDistance = 15 // in kilometers
   const [locationError, setLocationError] = useState<string | null>(null)
+
+  const colors = useMemo(() => {
+    const isLight = theme.background.toLowerCase().startsWith('#f')
+    return {
+      pageBg: theme.background,
+      cardBg: theme.surface,
+      cardSoft: theme.surfaceSoft,
+      text: theme.text,
+      muted: theme.muted,
+      accent: theme.accent,
+      inputPlaceholder: isLight ? '#818a96' : '#737373',
+      divider: theme.border,
+      locationWarning: isLight ? '#b45523' : '#f8b26f',
+    }
+  }, [theme])
 
   // Request location permission and get user location on mount
   useEffect(() => {
@@ -67,13 +95,6 @@ export function HomeScreen() {
   const filteredDishes = useMemo(() => {
     let filtered = menuItems
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(
-        (item) => item.name.toLowerCase().includes(query) || item.description.toLowerCase().includes(query)
-      )
-    }
-
     if (selectedCategory !== 'All') {
       filtered = filtered.filter((item) => {
         const tags = [item.name, item.description].join(' ').toLowerCase()
@@ -82,16 +103,11 @@ export function HomeScreen() {
     }
 
     return filtered
-  }, [searchQuery, selectedCategory])
+  }, [selectedCategory])
 
   // Filter restaurants based on search, rating, and distance
   const filteredRestaurants = useMemo(() => {
     let filtered: Restaurant[] = restaurantsWithDistance
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter((r) => r.name.toLowerCase().includes(query) || r.address.toLowerCase().includes(query))
-    }
 
     if (minRating > 0) {
       filtered = filtered.filter((r) => r.rating >= minRating)
@@ -101,7 +117,7 @@ export function HomeScreen() {
     filtered = filtered.filter((r) => (r.distance ?? Infinity) <= maxDistance)
 
     return filtered
-  }, [searchQuery, minRating])
+  }, [minRating, maxDistance, restaurantsWithDistance])
 
   const toggleFavorite = (itemId: string) => {
     setFavorites((prev) => (prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]))
@@ -128,46 +144,56 @@ export function HomeScreen() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.pageBg }]} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.topRow}>
-          <Feather name="menu" size={22} color="#f8fafc" />
-          <View style={styles.avatarWrap}>
-            <Text style={styles.avatarText}>🍽️</Text>
+          <View style={styles.leftSpacer} />
+          <View style={styles.topActions}>
+            <View style={[styles.themeSwitchWrap, { backgroundColor: colors.cardSoft, borderColor: colors.divider }]}>
+              <Pressable
+                onPress={() => onQuickThemeChange('midnight')}
+                style={[
+                  styles.themeButton,
+                  activeTheme === 'midnight' && { backgroundColor: colors.accent },
+                ]}
+              >
+                <Feather name="moon" size={13} color={activeTheme === 'midnight' ? '#0f1117' : colors.muted} />
+              </Pressable>
+              <Pressable
+                onPress={() => onQuickThemeChange('sand')}
+                style={[
+                  styles.themeButton,
+                  activeTheme === 'sand' && { backgroundColor: colors.accent },
+                ]}
+              >
+                <Feather name="sun" size={13} color={activeTheme === 'sand' ? '#0f1117' : colors.muted} />
+              </Pressable>
+            </View>
+            <View style={[styles.avatarWrap, { backgroundColor: colors.cardBg, borderColor: colors.divider }]}> 
+              <Text style={styles.avatarText}>🍽️</Text>
+            </View>
           </View>
         </View>
 
         {/* Hero Title */}
-        <Text style={styles.heroTitle}>
+        <Text style={[styles.heroTitle, { color: colors.text }]}>
           Find Your <Text style={styles.heroTitleBold}>Best</Text>{'\n'}
           <Text style={styles.heroTitleBold}>Food</Text> Around You
         </Text>
 
-        {/* Search Box */}
-        <View style={styles.searchBox}>
-          <Feather name="search" size={18} color="#d4d4d8" />
-          <TextInput
-            placeholder="Search restaurants or dishes"
-            placeholderTextColor="#737373"
-            style={styles.input}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          <Pressable onPress={() => setShowFilterModal(true)}>
-            <Feather name="sliders" size={16} color="#f8fafc" />
-          </Pressable>
-        </View>
+        {locationError ? <Text style={[styles.locationHint, { color: colors.locationWarning }]}>{locationError}</Text> : null}
+        {!userLocation ? <Text style={[styles.locationHint, { color: colors.muted }]}>Detecting your location...</Text> : null}
 
         {/* Promo Card */}
-        <View style={styles.promoCard}>
+        <View style={[styles.promoCard, { backgroundColor: colors.cardBg, borderColor: colors.divider }]}> 
           <View style={styles.promoContent}>
-            <Text style={styles.promoHeadline}>20% Discount 🔥</Text>
-            <Text style={styles.promoSubhead}>On your first order</Text>
+            <Text style={[styles.promoHeadline, { color: colors.accent }]}>20% Discount 🔥</Text>
+            <Text style={[styles.promoSubhead, { color: colors.text }]}>On your first order</Text>
             <View style={styles.promoMetaRow}>
-              <Text style={styles.promoMeta}>Limited time</Text>
-              <Text style={styles.promoMeta}>☆ 4.5</Text>
+              <Text style={[styles.promoMeta, { color: colors.muted }]}>Limited time</Text>
+              <Text style={[styles.promoMeta, { color: colors.muted }]}>☆ 4.5</Text>
             </View>
-            <Pressable style={styles.promoButton}>
+            <Pressable style={[styles.promoButton, { backgroundColor: colors.accent }]}>
               <Text style={styles.promoButtonText}>Claim Now</Text>
             </Pressable>
           </View>
@@ -181,8 +207,8 @@ export function HomeScreen() {
 
         {/* Categories */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Categories</Text>
-          <Text style={styles.seeAll}>All</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Categories</Text>
+          <Text style={[styles.seeAll, { color: colors.accent }]}>All</Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
           <View style={styles.chipsRow}>
@@ -192,9 +218,13 @@ export function HomeScreen() {
                 <Pressable
                   key={chip}
                   onPress={() => setSelectedCategory(chip)}
-                  style={[styles.chip, isActive && styles.chipActive]}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: colors.cardSoft, borderColor: colors.divider },
+                    isActive && [styles.chipActive, { backgroundColor: colors.accent, borderColor: colors.accent }],
+                  ]}
                 >
-                  <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{chip}</Text>
+                  <Text style={[styles.chipText, { color: colors.muted }, isActive && styles.chipTextActive]}>{chip}</Text>
                 </Pressable>
               )
             })}
@@ -205,35 +235,35 @@ export function HomeScreen() {
         {filteredRestaurants.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Restaurants</Text>
-              <Text style={styles.seeAll}>See All</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Restaurants</Text>
+              <Text style={[styles.seeAll, { color: colors.accent }]}>See All</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.restaurantRow}>
                 {filteredRestaurants.slice(0, 3).map((restaurant) => {
                   const isFav = favorites.includes(restaurant.id)
                   return (
-                    <View key={restaurant.id} style={styles.restaurantCard}>
+                    <View key={restaurant.id} style={[styles.restaurantCard, { backgroundColor: colors.cardBg, borderColor: colors.divider }]}> 
                       <View style={styles.restaurantImageWrap}>
                         <Image source={{ uri: restaurant.image }} style={styles.restaurantImage} />
                         <Pressable
                           onPress={() => toggleFavorite(restaurant.id)}
                           style={styles.restaurantHeartBtn}
                         >
-                          <Feather name={isFav ? 'heart' : 'heart'} size={16} color={isFav ? '#ef4444' : '#e8d17a'} fill={isFav ? '#ef4444' : 'none'} />
+                          <Feather name={isFav ? 'heart' : 'heart'} size={16} color={isFav ? '#ef4444' : colors.accent} fill={isFav ? '#ef4444' : 'none'} />
                         </Pressable>
                       </View>
                       <View style={styles.restaurantInfo}>
-                        <Text style={styles.restaurantName}>{restaurant.name}</Text>
+                        <Text style={[styles.restaurantName, { color: colors.text }]}>{restaurant.name}</Text>
                         <View style={styles.restaurantMeta}>
                           <Feather name="star" size={12} color="#f59e0b" />
-                          <Text style={styles.restaurantRating}>{restaurant.rating}</Text>
-                          <Text style={styles.restaurantTag}>{restaurant.safeTag}</Text>
+                          <Text style={[styles.restaurantRating, { color: colors.muted }]}>{restaurant.rating}</Text>
+                          <Text style={[styles.restaurantTag, { color: colors.muted }]}>{restaurant.safeTag}</Text>
                         </View>
                         {restaurant.distance !== undefined && (
                           <View style={styles.restaurantDistance}>
-                            <Feather name="map-pin" size={11} color="#8f95a3" />
-                            <Text style={styles.restaurantDistanceText}>{formatDistance(restaurant.distance)}</Text>
+                            <Feather name="map-pin" size={11} color={colors.muted} />
+                            <Text style={[styles.restaurantDistanceText, { color: colors.muted }]}>{formatDistance(restaurant.distance)}</Text>
                           </View>
                         )}
                       </View>
@@ -247,10 +277,8 @@ export function HomeScreen() {
 
         {/* Menu Items / Dishes */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            {searchQuery ? 'Results' : 'Popular Dishes'}
-          </Text>
-          <Text style={styles.itemCount}>{filteredDishes.length}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Popular Dishes</Text>
+          <Text style={[styles.itemCount, { color: colors.muted }]}>{filteredDishes.length}</Text>
         </View>
 
         {filteredDishes.length > 0 ? (
@@ -262,28 +290,28 @@ export function HomeScreen() {
                 unsafe: { bg: '#fee2e2', text: '#ef4444', icon: '✕' },
                 uncertain: { bg: '#fef9c3', text: '#a16207', icon: '?' },
               }
-              const colors = statusColors[item.status]
+              const statusColor = statusColors[item.status]
 
               return (
-                <View key={item.id} style={styles.dishCard}>
+                <View key={item.id} style={[styles.dishCard, { backgroundColor: colors.cardBg, borderColor: colors.divider }]}> 
                   <View style={styles.dishImageWrap}>
-                    <Image source={{ uri: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80' }} style={styles.dishImage} />
-                    <View style={[styles.safetyBadge, { backgroundColor: colors.bg }]}>
-                      <Text style={[styles.safetyText, { color: colors.text }]}>{colors.icon}</Text>
+                    <Image source={{ uri: item.image }} style={styles.dishImage} />
+                    <View style={[styles.safetyBadge, { backgroundColor: statusColor.bg }]}>
+                      <Text style={[styles.safetyText, { color: statusColor.text }]}>{statusColor.icon}</Text>
                     </View>
                   </View>
 
                   <View style={styles.dishContent}>
-                    <Text style={styles.dishName}>{item.name}</Text>
-                    <Text style={styles.dishDescription} numberOfLines={2}>
+                    <Text style={[styles.dishName, { color: colors.text }]}>{item.name}</Text>
+                    <Text style={[styles.dishDescription, { color: colors.muted }]} numberOfLines={2}>
                       {item.description}
                     </Text>
 
                     <View style={styles.dishFooter}>
                       <Pressable onPress={() => toggleFavorite(item.id)} style={styles.dishHeartBtn}>
-                        <Feather name="heart" size={14} color={isFav ? '#ef4444' : '#e8d17a'} fill={isFav ? '#ef4444' : 'none'} />
+                        <Feather name="heart" size={14} color={isFav ? '#ef4444' : colors.accent} fill={isFav ? '#ef4444' : 'none'} />
                       </Pressable>
-                      <Pressable onPress={() => addToCart(item.id, item.name, '$12.00')} style={styles.dishAddBtn}>
+                      <Pressable onPress={() => addToCart(item.id, item.name, '$12.00')} style={[styles.dishAddBtn, { backgroundColor: colors.accent }]}>
                         <Feather name="plus" size={14} color="#0f1117" />
                       </Pressable>
                     </View>
@@ -293,21 +321,21 @@ export function HomeScreen() {
             })}
           </View>
         ) : (
-          <View style={styles.emptyState}>
-            <Feather name="search" size={48} color="#8f95a3" />
-            <Text style={styles.emptyStateText}>No items found</Text>
-            <Text style={styles.emptyStateSubtext}>Try adjusting your filters or search query</Text>
+          <View style={[styles.emptyState, { backgroundColor: colors.cardBg, borderColor: colors.divider }]}> 
+            <Feather name="search" size={48} color={colors.muted} />
+            <Text style={[styles.emptyStateText, { color: colors.text }]}>No items found</Text>
+            <Text style={[styles.emptyStateSubtext, { color: colors.muted }]}>Try adjusting your filters</Text>
           </View>
         )}
 
         {/* Favorites Panel */}
         {favorites.length > 0 && (
-          <View style={styles.favoritesPanel}>
+          <View style={[styles.favoritesPanel, { backgroundColor: colors.cardBg, borderColor: colors.divider }]}> 
             <View style={styles.favoritesPanelHeader}>
               <Feather name="heart" size={16} color="#ef4444" fill="#ef4444" />
-              <Text style={styles.favoritesPanelTitle}>Saved {favorites.length} items</Text>
+              <Text style={[styles.favoritesPanelTitle, { color: colors.text }]}>Saved {favorites.length} items</Text>
             </View>
-            <Text style={styles.favoritesPanelSubtext}>Items you've liked are saved here</Text>
+            <Text style={[styles.favoritesPanelSubtext, { color: colors.muted }]}>Items you've liked are saved here</Text>
           </View>
         )}
       </ScrollView>
@@ -325,61 +353,6 @@ export function HomeScreen() {
         </View>
       )}
 
-      {/* Filter Modal */}
-      <Modal visible={showFilterModal} transparent animationType="slide">
-        <View style={styles.filterOverlay}>
-          <Pressable style={styles.filterDismiss} onPress={() => setShowFilterModal(false)} />
-          <View style={styles.filterContent}>
-            <View style={styles.filterHandle} />
-
-            <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Filters</Text>
-              <Pressable onPress={() => setShowFilterModal(false)}>
-                <Feather name="x" size={24} color="#1f2a3a" />
-              </Pressable>
-            </View>
-
-            <Text style={styles.filterLabel}>Minimum Rating</Text>
-            <View style={styles.ratingFilter}>
-              {[0, 3, 3.5, 4, 4.5, 5].map((rating) => (
-                <Pressable
-                  key={rating}
-                  onPress={() => setMinRating(rating)}
-                  style={[styles.ratingOption, minRating === rating && styles.ratingOptionActive]}
-                >
-                  <Text style={[styles.ratingOptionText, minRating === rating && styles.ratingOptionTextActive]}>
-                    {rating === 0 ? 'All' : `${rating}+`}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={styles.distanceSection}>
-              <View style={styles.distanceHeader}>
-                <Text style={styles.filterLabel}>Maximum Distance</Text>
-                <Text style={styles.distanceValue}>{maxDistance} km</Text>
-              </View>
-              <View style={styles.distanceOptions}>
-                {[5, 10, 15, 20, 30].map((distance) => (
-                  <Pressable
-                    key={distance}
-                    onPress={() => setMaxDistance(distance)}
-                    style={[styles.distanceOption, maxDistance === distance && styles.distanceOptionActive]}
-                  >
-                    <Text style={[styles.distanceOptionText, maxDistance === distance && styles.distanceOptionTextActive]}>
-                      {distance}km
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <Pressable style={styles.filterApplyBtn} onPress={() => setShowFilterModal(false)}>
-              <Text style={styles.filterApplyText}>Apply Filters</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </>
   )
 }
@@ -397,11 +370,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  leftSpacer: {
+    width: 22,
+  },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  themeSwitchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
+  },
+  themeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarWrap: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#23252b',
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -417,23 +413,9 @@ const styles = StyleSheet.create({
   heroTitleBold: {
     fontWeight: '800',
   },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#26282f',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: '#f8fafc',
-  },
   promoCard: {
-    backgroundColor: '#23252b',
     borderRadius: 20,
+    borderWidth: 1,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -498,6 +480,8 @@ const styles = StyleSheet.create({
     color: '#f3de85',
     fontSize: 14,
     fontWeight: '600',
+    flexShrink: 1,
+    textAlign: 'right',
   },
   itemCount: {
     color: '#8f95a3',
@@ -510,24 +494,33 @@ const styles = StyleSheet.create({
   },
   chipsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   chip: {
-    backgroundColor: '#2a2c33',
+    minWidth: 0,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipActive: {
     backgroundColor: '#f3de85',
   },
   chipText: {
     color: '#eceff3',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    flexShrink: 1,
   },
   chipTextActive: {
     color: '#0f1117',
+  },
+  locationHint: {
+    fontSize: 13,
+    marginTop: -8,
+    marginBottom: -2,
   },
   restaurantRow: {
     flexDirection: 'row',
@@ -720,8 +713,8 @@ const styles = StyleSheet.create({
     padding: 14,
     marginTop: 8,
     gap: 6,
-    borderLeftWidth: 4,
-    borderLeftColor: '#ef4444',
+    borderWidth: 1,
+    borderColor: '#27c06f',
   },
   favoritesPanelHeader: {
     flexDirection: 'row',
@@ -729,107 +722,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   favoritesPanelTitle: {
-    color: '#f8fafc',
-    fontWeight: '700',
     fontSize: 14,
+    fontWeight: '700',
   },
   favoritesPanelSubtext: {
-    color: '#8f95a3',
     fontSize: 12,
-  },
-  filterOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  filterDismiss: {
-    flex: 1,
-  },
-  filterContent: {
-    backgroundColor: '#f8fafc',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingTop: 12,
-    gap: 20,
-  },
-  filterHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#cbd5e1',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  filterTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1f2a3a',
-  },
-  filterLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1f2a3a',
-  },
-  ratingFilter: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  ratingOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: '#e8ecf3',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  ratingOptionActive: {
-    backgroundColor: '#f3de85',
-    borderColor: '#e9b13b',
-  },
-  ratingOptionText: {
-    color: '#6d798b',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  ratingOptionTextActive: {
-    color: '#0f1117',
-  },
-  distanceSection: {
-    gap: 12,
-  },
-  distanceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  distanceValue: {
-    color: '#27c06f',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  distanceOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  distanceOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: '#e8ecf3',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  distanceOptionActive: {
-    backgroundColor: '#c6f6d5',
-    borderColor: '#27c06f',
+    fontWeight: '500',
   },
   distanceOptionText: {
     color: '#6d798b',
