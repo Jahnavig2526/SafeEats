@@ -9,6 +9,10 @@ export type Restaurant = {
   trustScore: number
   safeTag: string
   image: string
+  latitude: number
+  longitude: number
+  address: string
+  distance?: number
 }
 
 export type MenuItem = {

@@ -1,7 +1,10 @@
 import { Feather } from '@expo/vector-icons'
-import { useMemo, useState } from 'react'
+import * as Location from 'expo-location'
+import { useEffect, useMemo, useState } from 'react'
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { restaurants, menuItems } from '../data/mockData'
+import { calculateDistance, formatDistance } from '../lib/geolocation'
+import type { Restaurant } from '../types'
 
 const categories = ['All', 'Vegan', 'Drinks', 'Healthy food', 'Italian', 'Asian']
 
@@ -12,6 +15,53 @@ export function HomeScreen() {
   const [cart, setCart] = useState<Array<{ itemId: string; name: string; price: string; quantity: number }>>([])
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [minRating, setMinRating] = useState(0)
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [maxDistance, setMaxDistance] = useState(15) // in kilometers
+  const [locationError, setLocationError] = useState<string | null>(null)
+
+  // Request location permission and get user location on mount
+  useEffect(() => {
+    const requestLocation = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status !== 'granted') {
+          setLocationError('Location permission denied')
+          // Use default location (NYC) for demo
+          setUserLocation({ latitude: 40.7505, longitude: -73.9972 })
+          return
+        }
+
+        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        })
+      } catch (error) {
+        console.error('Error getting location:', error)
+        // Use default location for demo
+        setUserLocation({ latitude: 40.7505, longitude: -73.9972 })
+      }
+    }
+
+    requestLocation()
+  }, [])
+
+  // Calculate distances and add them to restaurants
+  const restaurantsWithDistance = useMemo(() => {
+    if (!userLocation) return restaurants
+
+    return restaurants
+      .map((restaurant) => ({
+        ...restaurant,
+        distance: calculateDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          restaurant.latitude,
+          restaurant.longitude
+        ),
+      }))
+      .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
+  }, [userLocation])
 
   // Filter dishes based on search and category
   const filteredDishes = useMemo(() => {
@@ -34,18 +84,21 @@ export function HomeScreen() {
     return filtered
   }, [searchQuery, selectedCategory])
 
-  // Filter restaurants based on search and rating
+  // Filter restaurants based on search, rating, and distance
   const filteredRestaurants = useMemo(() => {
-    let filtered = restaurants
+    let filtered: Restaurant[] = restaurantsWithDistance
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
-      filtered = filtered.filter((r) => r.name.toLowerCase().includes(query))
+      filtered = filtered.filter((r) => r.name.toLowerCase().includes(query) || r.address.toLowerCase().includes(query))
     }
 
     if (minRating > 0) {
       filtered = filtered.filter((r) => r.rating >= minRating)
     }
+
+    // Filter by distance
+    filtered = filtered.filter((r) => (r.distance ?? Infinity) <= maxDistance)
 
     return filtered
   }, [searchQuery, minRating])
@@ -177,6 +230,12 @@ export function HomeScreen() {
                           <Text style={styles.restaurantRating}>{restaurant.rating}</Text>
                           <Text style={styles.restaurantTag}>{restaurant.safeTag}</Text>
                         </View>
+                        {restaurant.distance !== undefined && (
+                          <View style={styles.restaurantDistance}>
+                            <Feather name="map-pin" size={11} color="#8f95a3" />
+                            <Text style={styles.restaurantDistanceText}>{formatDistance(restaurant.distance)}</Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   )
@@ -293,6 +352,26 @@ export function HomeScreen() {
                   </Text>
                 </Pressable>
               ))}
+            </View>
+
+            <View style={styles.distanceSection}>
+              <View style={styles.distanceHeader}>
+                <Text style={styles.filterLabel}>Maximum Distance</Text>
+                <Text style={styles.distanceValue}>{maxDistance} km</Text>
+              </View>
+              <View style={styles.distanceOptions}>
+                {[5, 10, 15, 20, 30].map((distance) => (
+                  <Pressable
+                    key={distance}
+                    onPress={() => setMaxDistance(distance)}
+                    style={[styles.distanceOption, maxDistance === distance && styles.distanceOptionActive]}
+                  >
+                    <Text style={[styles.distanceOptionText, maxDistance === distance && styles.distanceOptionTextActive]}>
+                      {distance}km
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
 
             <Pressable style={styles.filterApplyBtn} onPress={() => setShowFilterModal(false)}>
@@ -721,6 +800,55 @@ const styles = StyleSheet.create({
   },
   ratingOptionTextActive: {
     color: '#0f1117',
+  },
+  distanceSection: {
+    gap: 12,
+  },
+  distanceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  distanceValue: {
+    color: '#27c06f',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  distanceOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  distanceOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#e8ecf3',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  distanceOptionActive: {
+    backgroundColor: '#c6f6d5',
+    borderColor: '#27c06f',
+  },
+  distanceOptionText: {
+    color: '#6d798b',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  distanceOptionTextActive: {
+    color: '#22863a',
+  },
+  restaurantDistance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  restaurantDistanceText: {
+    color: '#8f95a3',
+    fontSize: 12,
+    fontWeight: '500',
   },
   filterApplyBtn: {
     backgroundColor: '#27c06f',

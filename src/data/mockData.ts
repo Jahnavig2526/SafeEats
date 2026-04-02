@@ -11,6 +11,9 @@ export const restaurants: Restaurant[] = [
     safeTag: 'Safe for you',
     image:
       'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&q=80',
+    latitude: 40.7505,
+    longitude: -73.9972,
+    address: '123 Park Ave, New York, NY 10016',
   },
   {
     id: '2',
@@ -20,6 +23,9 @@ export const restaurants: Restaurant[] = [
     safeTag: 'Mostly safe',
     image:
       'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=600&q=80',
+    latitude: 40.7489,
+    longitude: -73.9680,
+    address: '456 5th Ave, New York, NY 10017',
   },
   {
     id: '3',
@@ -29,6 +35,33 @@ export const restaurants: Restaurant[] = [
     safeTag: 'Safe for you',
     image:
       'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=600&q=80',
+    latitude: 40.7614,
+    longitude: -73.9776,
+    address: '789 Madison Ave, New York, NY 10016',
+  },
+  {
+    id: '4',
+    name: 'Sunrise Cafe',
+    rating: 4.5,
+    trustScore: 88,
+    safeTag: 'Safe for you',
+    image:
+      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&q=80',
+    latitude: 40.7549,
+    longitude: -73.9840,
+    address: '321 Broadway, New York, NY 10007',
+  },
+  {
+    id: '5',
+    name: 'The Vegan Table',
+    rating: 4.8,
+    trustScore: 94,
+    safeTag: 'Safe for you',
+    image:
+      'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=600&q=80',
+    latitude: 40.7480,
+    longitude: -73.9862,
+    address: '654 Houston St, New York, NY 10014',
   },
 ]
 
