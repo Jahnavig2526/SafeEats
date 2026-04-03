@@ -1,11 +1,57 @@
 import { Feather } from '@expo/vector-icons'
 import * as Location from 'expo-location'
-import { useEffect, useMemo, useState } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { restaurants, menuItems } from '../data/mockData'
 import { calculateDistance, formatDistance } from '../lib/geolocation'
 import type { ThemeKey } from '../lib/preferences'
 import type { Restaurant } from '../types'
+
+type VoiceRecognitionResult = {
+  transcript: string
+}
+
+type VoiceRecognitionEvent = {
+  results: Array<{
+    0: VoiceRecognitionResult
+    length: number
+  }>
+}
+
+type VoiceRecognitionInstance = {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onstart: (() => void) | null
+  onresult: ((event: VoiceRecognitionEvent) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+type VoiceRecognitionConstructor = new () => VoiceRecognitionInstance
+
+type VoiceRecognitionWindow = Window & {
+  SpeechRecognition?: VoiceRecognitionConstructor
+  webkitSpeechRecognition?: VoiceRecognitionConstructor
+}
+
+type NativeSpeechModule = {
+  addListener: (eventName: string, listener: (event: any) => void) => { remove: () => void }
+  stop: () => void
+  isRecognitionAvailable: () => boolean
+  requestPermissionsAsync: () => Promise<{ granted: boolean }>
+  start: (options: { lang: string; interimResults: boolean; maxAlternatives: number; continuous: boolean }) => void
+}
+
+let nativeSpeechModule: NativeSpeechModule | null = null
+
+try {
+  nativeSpeechModule = require('expo-speech-recognition').ExpoSpeechRecognitionModule as NativeSpeechModule
+} catch {
+  nativeSpeechModule = null
+}
 
 const categories = ['All', 'Vegan', 'Drinks', 'Healthy food', 'Italian', 'Asian']
 
@@ -31,6 +77,10 @@ export function HomeScreen({ theme, activeTheme, onQuickThemeChange }: HomeScree
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
   const maxDistance = 15 // in kilometers
   const [locationError, setLocationError] = useState<string | null>(null)
+  const [assistantListening, setAssistantListening] = useState(false)
+  const [assistantTranscript, setAssistantTranscript] = useState('')
+  const [assistantReply, setAssistantReply] = useState('Say a command like “show vegan”, “switch to dark mode”, or “show all”.')
+  const recognitionRef = useRef<VoiceRecognitionInstance | null>(null)
 
   const colors = useMemo(() => {
     const isLight = theme.background.toLowerCase().startsWith('#f')
@@ -142,6 +192,221 @@ export function HomeScreen({ theme, activeTheme, onQuickThemeChange }: HomeScree
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0)
 
+  const speakResponse = useCallback((message: string) => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return
+    }
+
+    const win = window as VoiceRecognitionWindow & {
+      speechSynthesis: SpeechSynthesis
+      SpeechSynthesisUtterance: new (text: string) => SpeechSynthesisUtterance
+    }
+
+    win.speechSynthesis.cancel()
+    const utterance = new win.SpeechSynthesisUtterance(message)
+    utterance.rate = 1
+    utterance.pitch = 1
+    utterance.lang = 'en-US'
+    win.speechSynthesis.speak(utterance)
+  }, [])
+
+  const executeVoiceCommand = useCallback((rawCommand: string) => {
+    const command = rawCommand.trim().toLowerCase()
+
+    if (!command) {
+      return
+    }
+
+    if (command.includes('show all') || command.includes('clear filters') || command.includes('reset')) {
+      setSelectedCategory('All')
+      const response = 'Filters cleared. Showing all food categories.'
+      setAssistantReply(response)
+      speakResponse(response)
+      return
+    }
+
+    if (command.includes('vegan')) {
+      setSelectedCategory('Vegan')
+      const response = 'Showing vegan dishes.'
+      setAssistantReply(response)
+      speakResponse(response)
+      return
+    }
+
+    if (command.includes('drinks') || command.includes('drink')) {
+      setSelectedCategory('Drinks')
+      const response = 'Showing drinks.'
+      setAssistantReply(response)
+      speakResponse(response)
+      return
+    }
+
+    if (command.includes('healthy')) {
+      setSelectedCategory('Healthy food')
+      const response = 'Showing healthy food.'
+      setAssistantReply(response)
+      speakResponse(response)
+      return
+    }
+
+    if (command.includes('italian')) {
+      setSelectedCategory('Italian')
+      const response = 'Showing Italian dishes.'
+      setAssistantReply(response)
+      speakResponse(response)
+      return
+    }
+
+    if (command.includes('asian')) {
+      setSelectedCategory('Asian')
+      const response = 'Showing Asian dishes.'
+      setAssistantReply(response)
+      speakResponse(response)
+      return
+    }
+
+    if (command.includes('dark mode') || command.includes('midnight')) {
+      onQuickThemeChange('midnight')
+      const response = 'Switched to midnight theme.'
+      setAssistantReply(response)
+      speakResponse(response)
+      return
+    }
+
+    if (command.includes('light mode') || command.includes('sand')) {
+      onQuickThemeChange('sand')
+      const response = 'Switched to sand theme.'
+      setAssistantReply(response)
+      speakResponse(response)
+      return
+    }
+
+    const response = 'I heard your command, but I only understand category and theme changes for now.'
+    setAssistantReply(response)
+    speakResponse(response)
+  }, [onQuickThemeChange, speakResponse])
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return
+    }
+
+    if (!nativeSpeechModule) {
+      return
+    }
+
+    const startSubscription = nativeSpeechModule.addListener('start', () => {
+      setAssistantListening(true)
+      setAssistantReply('Listening...')
+    })
+
+    const resultSubscription = nativeSpeechModule.addListener('result', (event) => {
+      const transcript = event.results[0]?.transcript?.trim() ?? ''
+      if (!transcript) {
+        return
+      }
+
+      setAssistantTranscript(transcript)
+      if (event.isFinal) {
+        executeVoiceCommand(transcript)
+      }
+    })
+
+    const errorSubscription = nativeSpeechModule.addListener('error', () => {
+      setAssistantListening(false)
+      setAssistantReply('Could not understand the voice input. Try again.')
+    })
+
+    const endSubscription = nativeSpeechModule.addListener('end', () => {
+      setAssistantListening(false)
+    })
+
+    return () => {
+      startSubscription.remove()
+      resultSubscription.remove()
+      errorSubscription.remove()
+      endSubscription.remove()
+    }
+  }, [executeVoiceCommand])
+
+  const toggleVoiceAssistant = async () => {
+    if (Platform.OS !== 'web') {
+      if (!nativeSpeechModule) {
+        setAssistantReply('Voice assistant on mobile requires a development build. Expo Go does not include this native module.')
+        return
+      }
+
+      if (assistantListening) {
+        nativeSpeechModule.stop()
+        return
+      }
+
+      if (!nativeSpeechModule.isRecognitionAvailable()) {
+        setAssistantReply('Speech recognition is unavailable. Try a development build instead of Expo Go.')
+        return
+      }
+
+      try {
+        const permission = await nativeSpeechModule.requestPermissionsAsync()
+        if (!permission.granted) {
+          setAssistantReply('Microphone permission is required for voice assistant.')
+          return
+        }
+
+        nativeSpeechModule.start({
+          lang: 'en-US',
+          interimResults: false,
+          maxAlternatives: 1,
+          continuous: false,
+        })
+      } catch {
+        setAssistantReply('Voice assistant could not start. Please use a development build and try again.')
+      }
+      return
+    }
+
+    const win = window as VoiceRecognitionWindow
+    const SpeechRecognitionImpl = win.SpeechRecognition ?? win.webkitSpeechRecognition
+
+    if (!SpeechRecognitionImpl) {
+      setAssistantReply('Voice input is not supported in this browser.')
+      return
+    }
+
+    if (assistantListening) {
+      recognitionRef.current?.stop()
+      return
+    }
+
+    const recognition = new SpeechRecognitionImpl()
+    recognition.lang = 'en-US'
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+
+    recognition.onstart = () => {
+      setAssistantListening(true)
+      setAssistantReply('Listening...')
+    }
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim() ?? ''
+      setAssistantTranscript(transcript)
+      executeVoiceCommand(transcript)
+    }
+
+    recognition.onerror = () => {
+      setAssistantListening(false)
+      setAssistantReply('Could not understand the voice input. Try again.')
+    }
+
+    recognition.onend = () => {
+      setAssistantListening(false)
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+  }
+
   return (
     <>
       <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.pageBg }]} showsVerticalScrollIndicator={false}>
@@ -183,6 +448,33 @@ export function HomeScreen({ theme, activeTheme, onQuickThemeChange }: HomeScree
 
         {locationError ? <Text style={[styles.locationHint, { color: colors.locationWarning }]}>{locationError}</Text> : null}
         {!userLocation ? <Text style={[styles.locationHint, { color: colors.muted }]}>Detecting your location...</Text> : null}
+
+        <View style={[styles.voiceAssistantCard, { backgroundColor: colors.cardBg, borderColor: colors.divider }]}> 
+          <View style={styles.voiceAssistantHeader}>
+            <View style={[styles.voiceAssistantIcon, { backgroundColor: colors.cardSoft }]}> 
+              <Feather name="mic" size={16} color={colors.accent} />
+            </View>
+            <View style={styles.voiceAssistantCopy}>
+              <Text style={[styles.voiceAssistantTitle, { color: colors.text }]}>Voice assistant</Text>
+              <Text style={[styles.voiceAssistantSubtitle, { color: colors.muted }]}>Say a command to switch themes or filter dishes.</Text>
+            </View>
+          </View>
+          <Pressable
+            onPress={toggleVoiceAssistant}
+            style={[styles.voiceAssistantButton, { backgroundColor: colors.accent }]}
+          >
+            <Feather name={assistantListening ? 'square' : 'mic'} size={14} color="#0f1117" />
+            <Text style={styles.voiceAssistantButtonText}>{assistantListening ? 'Stop listening' : 'Start voice assistant'}</Text>
+          </Pressable>
+          <Text style={[styles.voiceAssistantStatus, { color: colors.text }]} numberOfLines={2}>
+            {assistantReply}
+          </Text>
+          {assistantTranscript ? (
+            <Text style={[styles.voiceAssistantTranscript, { color: colors.muted }]} numberOfLines={2}>
+              Last heard: “{assistantTranscript}”
+            </Text>
+          ) : null}
+        </View>
 
         {/* Promo Card */}
         <View style={[styles.promoCard, { backgroundColor: colors.cardBg, borderColor: colors.divider }]}> 
@@ -521,6 +813,59 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: -8,
     marginBottom: -2,
+  },
+  voiceAssistantCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  voiceAssistantHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  voiceAssistantIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceAssistantCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  voiceAssistantTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  voiceAssistantSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  voiceAssistantButton: {
+    minHeight: 42,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  voiceAssistantButtonText: {
+    color: '#0f1117',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  voiceAssistantStatus: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  voiceAssistantTranscript: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   restaurantRow: {
     flexDirection: 'row',
