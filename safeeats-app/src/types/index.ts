@@ -1,3 +1,9 @@
+export type TabKey = 'home' | 'restaurant' | 'scan' | 'profile' | 'settings'
+
+export type LanguageKey = 'en' | 'es' | 'fr' | 'hi' | 'te'
+
+export type ThemeKey = 'midnight' | 'ocean' | 'sand'
+
 export type SafetyStatus = 'safe' | 'unsafe' | 'uncertain'
 
 export type Restaurant = {

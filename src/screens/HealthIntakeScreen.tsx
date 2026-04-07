@@ -1,6 +1,6 @@
-import { Feather } from '@expo/vector-icons'
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 
 type HealthIntakeScreenProps = {
   userEmail: string
@@ -8,31 +8,49 @@ type HealthIntakeScreenProps = {
 }
 
 const allergyTiles = [
-  { key: 'Milk', label: 'Milk', color: 'milk' },
-  { key: 'Eggs', label: 'Eggs', color: 'eggs' },
-  { key: 'Gluten', label: 'Gluten', color: 'gluten' },
-  { key: 'Soy', label: 'Soy', color: 'soy' },
-  { key: 'Peanuts', label: 'Peanuts', color: 'peanuts' },
-  { key: 'Peanut', label: 'Soy', color: 'soy' },
-  { key: 'Peanuts-2', label: 'Peanuts', color: 'peanuts' },
-  { key: 'Fish', label: 'Fish', color: 'fish' },
+  { key: 'Milk', label: 'Milk', kind: 'milk' as const },
+  { key: 'Eggs', label: 'Eggs', kind: 'icon' as const, icon: 'egg' as const },
+  { key: 'Gluten', label: 'Gluten', kind: 'gluten' as const },
+  { key: 'Soy', label: 'Soy', kind: 'icon' as const, icon: 'soy-sauce' as const },
+  { key: 'Peanuts', label: 'Peanuts', kind: 'icon' as const, icon: 'peanut' as const },
+  { key: 'Fish', label: 'Fish', kind: 'icon' as const, icon: 'fish' as const },
 ] as const
 
 const healthIssueTiles = [
-  { key: 'Asthma', label: 'Asthma', icon: 'lock' as const, tone: 'warning' as const },
-  { key: 'Eczema', label: 'Eczema', icon: 'star' as const, tone: 'muted' as const },
-  { key: 'High BP', label: 'High BP', icon: 'star' as const, tone: 'muted' as const },
-  { key: 'Celiac', label: 'Celiac', icon: 'star' as const, tone: 'muted' as const },
+  { key: 'Asthma', label: 'Asthma', icon: 'lungs' as const },
+  { key: 'Eczema', label: 'Eczema', icon: 'water-percent' as const },
+  { key: 'High BP', label: 'High BP', icon: 'heart-pulse' as const },
+  { key: 'Celiac', label: 'Celiac', icon: 'barley' as const, selected: true },
 ]
 
 const sensitivityOptions: Array<'Strict' | 'Moderate' | 'Flexible'> = ['Strict', 'Moderate', 'Flexible']
 
+function MilkBottleIcon() {
+  return (
+    <View style={styles.milkBottleWrap}>
+      <View style={styles.milkBottleCap} />
+      <View style={styles.milkBottleNeck} />
+      <View style={styles.milkBottleBody}>
+        <View style={styles.milkLabel}>
+          <Text style={styles.milkLabelText}>MILK</Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+function GlutenIcon() {
+  return (
+    <View style={styles.glutenWrap}>
+      <MaterialCommunityIcons name="barley" size={46} color="#2d2d2d" />
+    </View>
+  )
+}
+
 export function HealthIntakeScreen({ userEmail, onComplete }: HealthIntakeScreenProps) {
   const [allergies, setAllergies] = useState<string[]>(['Peanuts'])
-  const [healthIssues, setHealthIssues] = useState<string[]>(['Eczema', 'High BP'])
+  const [healthIssues, setHealthIssues] = useState<string[]>(['Celiac'])
   const [sensitivity, setSensitivity] = useState<(typeof sensitivityOptions)[number]>('Moderate')
-  const { width } = useWindowDimensions()
-  const isWide = width >= 760
 
   const canContinue = useMemo(() => allergies.length > 0, [allergies.length])
 
@@ -46,22 +64,8 @@ export function HealthIntakeScreen({ userEmail, onComplete }: HealthIntakeScreen
 
   return (
     <View style={styles.screen}>
-      <View style={styles.flowerLeft} />
-      <View style={styles.flowerRight} />
-      <View style={styles.flowerBottomLeft} />
-      <View style={styles.flowerBottomRight} />
-
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.phoneFrame}>
-          <View style={styles.topBar}>
-            <Pressable style={styles.topButton}>
-              <Feather name="chevron-left" size={26} color="#3b4757" />
-            </Pressable>
-            <Pressable style={styles.topButton}>
-              <Feather name="heart" size={24} color="#3b4757" />
-            </Pressable>
-          </View>
-
           <View style={styles.header}>
             <Text style={styles.title}>Set Your Preferences</Text>
             <Text style={styles.subtitle}>Personalize your settings to find safe food options for you.</Text>
@@ -69,22 +73,23 @@ export function HealthIntakeScreen({ userEmail, onComplete }: HealthIntakeScreen
 
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Food Allergies</Text>
-            <View style={[styles.allergyRow, !isWide && styles.allergyRowCompact]}>
+            <View style={styles.allergyGrid}>
               {allergyTiles.map((tile) => {
                 const isSelected = allergies.includes(tile.key)
                 return (
                   <Pressable
                     key={tile.key}
-                    style={[
-                      styles.tileButton,
-                      !isWide && styles.tileButtonCompact,
-                      isSelected && styles.tileButtonSelected,
-                    ]}
+                    style={[styles.allergyTile, isSelected && styles.allergyTileSelected]}
                     onPress={() => toggleValue(tile.key, allergies, setAllergies)}
                   >
-                    <View style={[styles.tileCapsule, styles[`capsule_${tile.color}` as const], !isSelected && styles.tileDim]}>
-                      <View style={styles.tileCapsuleTop} />
-                      <View style={styles.tileCapsuleBottom} />
+                    <View style={[styles.allergyIconCircle, isSelected && styles.allergyIconCircleSelected]}>
+                      {tile.kind === 'milk' ? (
+                        <MilkBottleIcon />
+                      ) : tile.kind === 'gluten' ? (
+                        <GlutenIcon />
+                      ) : (
+                        <MaterialCommunityIcons name={tile.icon} size={isSelected ? 42 : 40} color={isSelected ? '#c98b3a' : '#4b5a73'} />
+                      )}
                     </View>
                     <Text style={[styles.tileLabel, isSelected && styles.tileLabelActive]}>{tile.label}</Text>
                   </Pressable>
@@ -94,25 +99,20 @@ export function HealthIntakeScreen({ userEmail, onComplete }: HealthIntakeScreen
           </View>
 
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Health Issues</Text>
+            <Text style={styles.sectionTitle}>Relevant Medical Conditions</Text>
             <View style={styles.issueRow}>
               {healthIssueTiles.map((tile) => {
                 const isSelected = healthIssues.includes(tile.key)
                 return (
                   <Pressable
                     key={tile.key}
-                    style={[
-                      styles.issuePill,
-                      tile.tone === 'warning' && styles.issueWarning,
-                      tile.tone === 'muted' && styles.issueMuted,
-                      isSelected && styles.issuePillActive,
-                    ]}
+                    style={[styles.issuePill, isSelected && styles.issuePillActive, tile.selected && styles.issuePillAccent]}
                     onPress={() => toggleValue(tile.key, healthIssues, setHealthIssues)}
                   >
-                    <View style={[styles.issueIcon, tile.tone === 'warning' && styles.issueIconWarning, tile.tone === 'muted' && styles.issueIconMuted]}>
-                      <Feather name={tile.icon} size={13} color="#ffffff" />
+                    <View style={[styles.issueIcon, tile.selected ? styles.issueIconAccent : styles.issueIconMuted]}>
+                      <MaterialCommunityIcons name={tile.icon} size={14} color="#ffffff" />
                     </View>
-                    <Text style={styles.issueLabel}>{tile.label}</Text>
+                    <Text style={[styles.issueLabel, tile.selected && styles.issueLabelSelected]}>{tile.label}</Text>
                   </Pressable>
                 )
               })}
@@ -154,11 +154,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
   },
   phoneFrame: {
-    borderRadius: 30,
+    borderRadius: 34,
     backgroundColor: '#fffdfb',
     borderWidth: 1,
     borderColor: '#ece7df',
@@ -168,39 +168,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 4,
     paddingHorizontal: 18,
-    paddingTop: 16,
+    paddingTop: 18,
     paddingBottom: 18,
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  topButton: {
-    width: 54,
-    height: 42,
-    borderRadius: 22,
-    backgroundColor: '#fff6f2',
-    borderWidth: 1,
-    borderColor: '#eee6de',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginTop: 18,
+    marginTop: 8,
     marginBottom: 18,
   },
   title: {
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 31,
+    lineHeight: 35,
     fontWeight: '800',
-    color: '#3d4d5d',
+    color: '#13284a',
     textAlign: 'center',
   },
   subtitle: {
     marginTop: 8,
-    color: '#7a8088',
+    color: '#31415d',
     fontSize: 16,
     lineHeight: 22,
     textAlign: 'center',
@@ -221,86 +206,111 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   sectionTitle: {
-    color: '#374354',
-    fontSize: 20,
-    lineHeight: 24,
+    color: '#13284a',
+    fontSize: 22,
+    lineHeight: 26,
     fontWeight: '800',
     marginBottom: 12,
   },
-  allergyRow: {
-    flexDirection: 'row',
-    flexWrap: 'nowrap',
-    gap: 10,
+  allergyGrid: {
     justifyContent: 'space-between',
-  },
-  allergyRowCompact: {
+    flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
     gap: 12,
   },
-  tileButton: {
+  allergyTile: {
     alignItems: 'center',
-    width: 60,
-    borderRadius: 18,
-    paddingVertical: 8,
+    width: '31%',
+    paddingVertical: 6,
   },
-  tileButtonCompact: {
-    width: 64,
+  allergyTileSelected: {
+    opacity: 1,
   },
-  tileButtonSelected: {
-    backgroundColor: '#edf8ef',
-    borderWidth: 1,
-    borderColor: '#d3ebd9',
+  allergyIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f2ede5',
   },
-  tileCapsule: {
-    width: 30,
-    height: 56,
-    borderRadius: 15,
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  tileCapsuleTop: {
-    flex: 1,
-    backgroundColor: '#f7dcc0',
-  },
-  tileCapsuleBottom: {
-    flex: 1,
-    backgroundColor: '#e3bf96',
-  },
-  capsule_milk: {
-    backgroundColor: '#f3d6b4',
-  },
-  capsule_eggs: {
-    backgroundColor: '#f6a03a',
-  },
-  capsule_gluten: {
-    backgroundColor: '#f7a232',
-  },
-  capsule_soy: {
-    backgroundColor: '#f79d2d',
-  },
-  capsule_peanuts: {
-    backgroundColor: '#64c156',
-  },
-  capsule_fish: {
-    backgroundColor: '#f6cb53',
-  },
-  tileDim: {
-    opacity: 0.34,
+  allergyIconCircleSelected: {
+    backgroundColor: '#fff2d9',
+    borderWidth: 2,
+    borderColor: '#c98b3a',
   },
   tileLabel: {
-    color: '#6d737b',
-    fontSize: 13,
-    lineHeight: 16,
+    marginTop: 10,
+    color: '#273751',
+    fontSize: 15,
+    lineHeight: 18,
     textAlign: 'center',
   },
   tileLabelActive: {
-    color: '#3d4d5d',
+    color: '#c98b3a',
+  },
+  milkBottleWrap: {
+    width: 42,
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  milkBottleCap: {
+    width: 18,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#2d3d56',
+    marginTop: 2,
+  },
+  milkBottleNeck: {
+    width: 12,
+    height: 8,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderTopWidth: 2,
+    borderColor: '#3c4f6d',
+    marginTop: 2,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+  },
+  milkBottleBody: {
+    width: 30,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#3c4f6d',
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  milkLabel: {
+    width: 28,
+    height: 14,
+    borderRadius: 8,
+    backgroundColor: '#f4f4f4',
+    borderWidth: 1,
+    borderColor: '#3c4f6d',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  milkLabelText: {
+    fontSize: 6,
+    fontWeight: '800',
+    color: '#2d2d2d',
+    letterSpacing: 1.2,
+  },
+  glutenWrap: {
+    width: 42,
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   issueRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    justifyContent: 'center',
   },
   issuePill: {
     flexDirection: 'row',
@@ -317,14 +327,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#edf8ef',
     borderColor: '#d3ebd9',
   },
-  issueWarning: {
-    backgroundColor: '#f8f0e6',
-  },
-  issueSuccess: {
-    backgroundColor: '#edf5ea',
-  },
-  issueMuted: {
-    backgroundColor: '#f5efe7',
+  issuePillAccent: {
+    backgroundColor: '#edf8ef',
   },
   issueIcon: {
     width: 20,
@@ -332,21 +336,22 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f1a52d',
+    backgroundColor: '#7d7d7d',
   },
-  issueIconWarning: {
-    backgroundColor: '#f0b33a',
-  },
-  issueIconSuccess: {
-    backgroundColor: '#83cb67',
+  issueIconAccent: {
+    backgroundColor: '#2fc89a',
   },
   issueIconMuted: {
-    backgroundColor: '#f0ce7d',
+    backgroundColor: '#a9a299',
   },
   issueLabel: {
     color: '#5d636a',
     fontSize: 15,
     fontWeight: '600',
+  },
+  issueLabelSelected: {
+    color: '#2e3d55',
+    fontWeight: '700',
   },
   segmentWrap: {
     flexDirection: 'row',
@@ -400,45 +405,5 @@ const styles = StyleSheet.create({
     color: '#fafffd',
     fontSize: 18,
     fontWeight: '800',
-  },
-  flowerLeft: {
-    position: 'absolute',
-    left: -16,
-    top: 76,
-    width: 86,
-    height: 200,
-    borderRadius: 28,
-    backgroundColor: '#efeee8',
-    opacity: 0.75,
-  },
-  flowerRight: {
-    position: 'absolute',
-    right: -10,
-    top: 72,
-    width: 88,
-    height: 240,
-    borderRadius: 28,
-    backgroundColor: '#efeee8',
-    opacity: 0.72,
-  },
-  flowerBottomLeft: {
-    position: 'absolute',
-    left: 20,
-    bottom: 12,
-    width: 120,
-    height: 78,
-    borderRadius: 30,
-    backgroundColor: '#eef6ee',
-    opacity: 0.75,
-  },
-  flowerBottomRight: {
-    position: 'absolute',
-    right: 16,
-    bottom: 10,
-    width: 110,
-    height: 84,
-    borderRadius: 30,
-    backgroundColor: '#fce8dd',
-    opacity: 0.75,
   },
 })
