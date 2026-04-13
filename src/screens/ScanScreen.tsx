@@ -1,7 +1,9 @@
 ﻿import { Feather } from '@expo/vector-icons'
+import Constants from 'expo-constants'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import * as ImagePicker from 'expo-image-picker'
 import { useMemo, useState } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import type { UserIntakeProfile } from '../types'
 
 type FoodItem = {
@@ -16,6 +18,13 @@ type FoodItem = {
 type ScanResult = {
   status: 'safe' | 'unsafe' | 'uncertain'
   conflicts: string[]
+}
+
+type MlPrediction = {
+  foodLabel: string
+  confidence: number
+  ingredients: string[]
+  topPredictions: Array<{ label: string; confidence: number }>
 }
 
 const foodDatabase: FoodItem[] = [
@@ -83,11 +92,15 @@ type ScanScreenProps = {
 }
 
 export function ScanScreen({ profile, theme }: ScanScreenProps) {
+  const configuredIngredientApiBaseUrl = process.env.EXPO_PUBLIC_INGREDIENT_API_BASE_URL?.trim() || ''
   const [permission, requestPermission] = useCameraPermissions()
   const [cameraOpen, setCameraOpen] = useState(false)
   const [hasScanned, setHasScanned] = useState(false)
   const [lastBarcode, setLastBarcode] = useState('')
   const [scannedFood, setScannedFood] = useState<FoodItem | null>(null)
+  const [mlPrediction, setMlPrediction] = useState<MlPrediction | null>(null)
+  const [isMlAnalyzing, setIsMlAnalyzing] = useState(false)
+  const [mlError, setMlError] = useState('')
   const [searchText, setSearchText] = useState('')
   const [showResults, setShowResults] = useState(false)
 
@@ -108,6 +121,34 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
       cameraButtonBg: isLight ? 'rgba(15, 23, 42, 0.82)' : 'rgba(15, 23, 42, 0.75)',
     }
   }, [theme])
+
+  const ingredientApiBaseUrls = useMemo(() => {
+    if (configuredIngredientApiBaseUrl) {
+      return [configuredIngredientApiBaseUrl]
+    }
+
+    const candidates: string[] = []
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      candidates.push(`http://${window.location.hostname}:8000`)
+    }
+
+    const linkingUri = Constants.linkingUri || ''
+    const hostMatch = linkingUri.match(/\/\/([^/:]+)(?::\d+)?/)
+    if (hostMatch?.[1]) {
+      candidates.push(`http://${hostMatch[1]}:8000`)
+    }
+
+    if (!configuredIngredientApiBaseUrl && Platform.OS !== 'web') {
+      candidates.push('http://172.250.18.142:8000')
+    }
+
+    if (!configuredIngredientApiBaseUrl && Platform.OS === 'web' && typeof window !== 'undefined') {
+      candidates.push(`http://${window.location.hostname}:8000`)
+    }
+
+    return Array.from(new Set(candidates))
+  }, [configuredIngredientApiBaseUrl])
 
   const userAllergies = useMemo(() => profile?.allergies?.map((a) => a.trim().toLowerCase()) ?? [], [profile])
 
@@ -137,6 +178,8 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
 
   const handleScanFood = (food: FoodItem, barcode?: string) => {
     setScannedFood(food)
+    setMlPrediction(null)
+    setMlError('')
     setLastBarcode(barcode ?? '')
     setShowResults(true)
     setCameraOpen(false)
@@ -156,6 +199,7 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
     }
 
     setLastBarcode(data)
+    setMlPrediction(null)
     setScannedFood({
       id: 'unknown',
       name: 'Unknown Product',
@@ -181,6 +225,8 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
   const resetScan = () => {
     setShowResults(false)
     setScannedFood(null)
+    setMlPrediction(null)
+    setMlError('')
     setSearchText('')
     setLastBarcode('')
     setHasScanned(false)
@@ -189,6 +235,128 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
   const handleSearchScan = () => {
     const found = foodDatabase.find((f) => f.name.toLowerCase().includes(searchText.toLowerCase()))
     if (found) handleScanFood(found)
+  }
+
+  const deriveAllergensFromIngredients = (ingredients: string[]) => {
+    const mapping: Array<{ allergen: string; keywords: string[] }> = [
+      { allergen: 'milk', keywords: ['milk', 'cheese', 'butter', 'cream', 'yogurt'] },
+      { allergen: 'egg', keywords: ['egg'] },
+      { allergen: 'peanuts', keywords: ['peanut'] },
+      { allergen: 'tree nuts', keywords: ['almond', 'cashew', 'walnut', 'pistachio', 'hazelnut'] },
+      { allergen: 'soy', keywords: ['soy', 'tofu'] },
+      { allergen: 'wheat', keywords: ['wheat', 'flour', 'bread', 'pasta', 'noodle'] },
+      { allergen: 'shellfish', keywords: ['shrimp', 'prawn', 'crab', 'lobster'] },
+      { allergen: 'fish', keywords: ['fish', 'salmon', 'tuna'] },
+    ]
+
+    const normalizedIngredients = ingredients.map((item) => item.toLowerCase())
+    const allergens = new Set<string>()
+
+    for (const mapEntry of mapping) {
+      if (normalizedIngredients.some((item) => mapEntry.keywords.some((keyword) => item.includes(keyword)))) {
+        allergens.add(mapEntry.allergen)
+      }
+    }
+
+    return Array.from(allergens)
+  }
+
+  const analyzeFoodImageWithModel = async () => {
+    try {
+      setMlError('')
+      const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!mediaPermission.granted) {
+        setMlError('Media permission denied. Please allow access to pick food images.')
+        return
+      }
+
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      })
+
+      if (picked.canceled || !picked.assets?.length) {
+        return
+      }
+
+      const selectedImage = picked.assets[0]
+      setIsMlAnalyzing(true)
+
+      const fallbackName = selectedImage.fileName || 'food-scan.jpg'
+      const fallbackType = selectedImage.mimeType || 'image/jpeg'
+      const webFile = Platform.OS === 'web' && selectedImage.file ? selectedImage.file : null
+      const webBlob = Platform.OS === 'web' && !webFile ? await (await fetch(selectedImage.uri)).blob() : null
+
+      const createFormData = () => {
+        const body = new FormData()
+
+        if (Platform.OS === 'web' && webFile) {
+          body.append('file', webFile)
+          return body
+        }
+
+        if (Platform.OS === 'web' && webBlob) {
+          body.append('file', webBlob, fallbackName)
+          return body
+        }
+
+        body.append('file', {
+          uri: selectedImage.uri,
+          name: fallbackName,
+          type: fallbackType,
+        } as unknown as Blob)
+
+        return body
+      }
+
+      let successPayload: MlPrediction | null = null
+      let lastErrorMessage = 'Unable to connect to ingredient ML server.'
+
+      for (const baseUrl of ingredientApiBaseUrls) {
+        try {
+          const requestBody = createFormData()
+          const response = await fetch(`${baseUrl}/predict-ingredients`, {
+            method: 'POST',
+            body: requestBody,
+          })
+
+          const payload = (await response.json()) as MlPrediction | { detail?: string }
+          if (!response.ok) {
+            lastErrorMessage = ('detail' in payload && payload.detail) || `ML API error from ${baseUrl}`
+            continue
+          }
+
+          successPayload = payload as MlPrediction
+          break
+        } catch {
+          lastErrorMessage = `Could not connect to ${baseUrl}`
+        }
+      }
+
+      if (!successPayload) {
+        setMlError(`${lastErrorMessage} Tried: ${ingredientApiBaseUrls.join(', ')}`)
+        return
+      }
+
+      const prediction = successPayload
+      const detectedAllergens = deriveAllergensFromIngredients(prediction.ingredients)
+      setMlPrediction(prediction)
+      setScannedFood({
+        id: `ml-${Date.now()}`,
+        name: prediction.foodLabel,
+        image: selectedImage.uri,
+        allergens: detectedAllergens,
+        healthConcerns: [],
+        description: `ML model confidence: ${prediction.confidence.toFixed(2)}%. Predicted ingredients are shown below.`,
+      })
+      setLastBarcode('')
+      setShowResults(true)
+    } catch {
+      setMlError('Unable to connect to ingredient ML server. Check EXPO_PUBLIC_INGREDIENT_API_BASE_URL and ensure ml-server is running on port 8000.')
+    } finally {
+      setIsMlAnalyzing(false)
+    }
   }
 
   if (cameraOpen) {
@@ -252,6 +420,21 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
           <Text style={[styles.description, { color: colors.muted }]}>{scannedFood.description}</Text>
           {!!lastBarcode && <Text style={[styles.barcodeText, { color: colors.text }]}>Barcode: {lastBarcode}</Text>}
 
+          {mlPrediction && (
+            <View style={[styles.conflictBox, { backgroundColor: colors.softBg, borderColor: colors.border }]}>
+              <Text style={[styles.conflictTitle, { color: colors.text }]}>ML Ingredients</Text>
+              {mlPrediction.ingredients.map((ingredient) => (
+                <Text key={ingredient} style={[styles.conflictItem, { color: colors.muted }]}>- {ingredient}</Text>
+              ))}
+              <Text style={[styles.topPredictionTitle, { color: colors.text }]}>Top predictions</Text>
+              {mlPrediction.topPredictions.map((item) => (
+                <Text key={item.label} style={[styles.conflictItem, { color: colors.muted }]}>
+                  - {item.label} ({item.confidence.toFixed(2)}%)
+                </Text>
+              ))}
+            </View>
+          )}
+
           {safetyCheck.conflicts.length > 0 && (
             <View style={[styles.conflictBox, isUnsafe ? styles.conflictBoxUnsafe : styles.conflictBoxUncertain]}>
               <Text style={[styles.conflictTitle, { color: colors.text }]}>{isUnsafe ? 'Allergens Found:' : 'Potential Issues:'}</Text>
@@ -287,6 +470,12 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
           <Feather name="camera" size={18} color="#ffffff" />
           <Text style={styles.primaryScanText}>Open Camera Scanner</Text>
         </Pressable>
+
+        <Pressable style={[styles.mlScanBtn, { borderColor: colors.border, backgroundColor: colors.cardBg }]} onPress={analyzeFoodImageWithModel}>
+          <Feather name="image" size={18} color={colors.accent} />
+          <Text style={[styles.mlScanText, { color: colors.text }]}>{isMlAnalyzing ? 'Analyzing with ML model...' : 'Analyze Food Photo (ML Ingredients)'}</Text>
+        </Pressable>
+        {!!mlError && <Text style={styles.mlErrorText}>{mlError}</Text>}
 
         <View style={styles.searchSection}>
           <View style={[styles.searchBox, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
@@ -338,6 +527,17 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   primaryScanText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  mlScanBtn: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  mlScanText: { fontSize: 14, fontWeight: '600' },
+  mlErrorText: { color: '#dc2626', fontSize: 12, fontWeight: '600', textAlign: 'center' },
   searchSection: { flexDirection: 'row', gap: 8 },
   searchBox: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1,
@@ -384,6 +584,7 @@ const styles = StyleSheet.create({
   conflictBoxUnsafe: { backgroundColor: '#fef2f2', borderColor: '#fecaca' },
   conflictBoxUncertain: { backgroundColor: '#fefce8', borderColor: '#fef08a' },
   conflictTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  topPredictionTitle: { fontSize: 12, fontWeight: '700', marginTop: 4 },
   conflictItem: { fontSize: 12, color: '#475569' },
   scanAgainButton: {
     marginHorizontal: 16, marginTop: 4, paddingVertical: 12, flexDirection: 'row', gap: 8,
