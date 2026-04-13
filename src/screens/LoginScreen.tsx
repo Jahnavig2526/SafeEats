@@ -9,7 +9,7 @@ type LoginScreenProps = {
 }
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {
-  const authApiBaseUrl = process.env.EXPO_PUBLIC_AUTH_API_BASE_URL?.trim()
+  const authApiBaseUrl = process.env.EXPO_PUBLIC_AUTH_API_BASE_URL?.trim() || 'http://localhost:4000'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
@@ -30,12 +30,6 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       return
     }
 
-    if (!authApiBaseUrl) {
-      setErrorMessage('Auth API is not configured. Add EXPO_PUBLIC_AUTH_API_BASE_URL in .env.')
-      setInfoMessage('')
-      return
-    }
-
     try {
       setIsSendingCode(true)
       setErrorMessage('')
@@ -48,22 +42,26 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         },
         body: JSON.stringify({ email: email.trim() }),
       })
-      const payload = (await response.json()) as { ok: boolean; message?: string; devOtp?: string }
 
+      const payload = (await response.json()) as { ok?: boolean; message?: string; devOtp?: string }
       if (!response.ok || !payload.ok) {
-        setErrorMessage(payload.message || 'Failed to send verification code.')
+        setErrorMessage(payload.message || 'Failed to send OTP.')
         return
       }
 
       setHasSentCode(true)
       setIsEmailVerified(false)
       setVerificationCode('')
+
       if (payload.devOtp) {
-        setInfoMessage(`Dev mode code for ${email.trim()}: ${payload.devOtp}`)
         Alert.alert('SafeEats OTP (Dev Mode)', `Use this code to verify:\n${payload.devOtp}`)
+        setInfoMessage(`OTP sent. Dev code: ${payload.devOtp}`)
       } else {
-        setInfoMessage(`Verification code sent to ${email.trim()}. Check inbox and spam folder.`)
+        setInfoMessage(`OTP sent to ${email.trim()}. Please check your inbox.`)
       }
+    } catch {
+      setErrorMessage('Could not reach auth server. Ensure auth server is running.')
+      setInfoMessage('')
     } finally {
       setIsSendingCode(false)
     }
@@ -71,19 +69,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
   const verifyCode = async () => {
     if (!hasSentCode) {
-      setErrorMessage('Send verification code first.')
+      setErrorMessage('Please send OTP first.')
       setInfoMessage('')
       return
     }
 
     if (verificationCode.trim().length !== 6) {
-      setErrorMessage('Please enter the 6-digit verification code.')
-      setInfoMessage('')
-      return
-    }
-
-    if (!authApiBaseUrl) {
-      setErrorMessage('Auth API is not configured. Add EXPO_PUBLIC_AUTH_API_BASE_URL in .env.')
+      setErrorMessage('Enter the 6-digit OTP code.')
       setInfoMessage('')
       return
     }
@@ -100,30 +92,40 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         },
         body: JSON.stringify({ email: email.trim(), token: verificationCode.trim() }),
       })
-      const payload = (await response.json()) as { ok: boolean; message?: string }
 
+      const payload = (await response.json()) as { ok?: boolean; message?: string }
       if (!response.ok || !payload.ok) {
-        setErrorMessage(payload.message || 'Failed to verify code.')
         setIsEmailVerified(false)
+        setErrorMessage(payload.message || 'OTP verification failed.')
         return
       }
 
-      setInfoMessage('Email verified successfully. You can now sign in.')
       setIsEmailVerified(true)
+      setInfoMessage('Email OTP verified. You can now sign in.')
+    } catch {
+      setIsEmailVerified(false)
+      setErrorMessage('Could not reach auth server. Ensure auth server is running.')
+      setInfoMessage('')
     } finally {
       setIsVerifyingCode(false)
     }
   }
 
-  const canSignIn = isEmailVerified && password.trim().length > 0
-
-  const previewLogin = () => {
-    const fallbackEmail = 'preview@safeeats.app'
-    onLogin(isEmailFormatValid ? email.trim() : fallbackEmail)
-  }
+  const canSignIn = isEmailFormatValid && password.trim().length >= 6 && isEmailVerified
 
   const signIn = async () => {
-    if (!canSignIn) {
+    if (!isEmailFormatValid) {
+      setErrorMessage('Please enter a valid email address.')
+      return
+    }
+
+    if (password.trim().length < 6) {
+      setErrorMessage('Password must be at least 6 characters.')
+      return
+    }
+
+    if (!isEmailVerified) {
+      setErrorMessage('Please verify the OTP sent to your email before signing in.')
       return
     }
 
@@ -135,6 +137,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     } finally {
       setIsSigningIn(false)
     }
+  }
+
+  const fakeLoginForReview = () => {
+    const reviewEmail = isEmailFormatValid ? email.trim() : 'reviewer@safeeats.app'
+    setErrorMessage('')
+    setInfoMessage('Review login enabled. Entering app without OTP for demo.')
+    onLogin(reviewEmail)
   }
 
   return (
@@ -150,6 +159,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             onChangeText={(value) => {
               setEmail(value)
               setIsEmailVerified(false)
+              setHasSentCode(false)
+              setVerificationCode('')
             }}
             placeholder="Enter your email"
             placeholderTextColor="#94a3b8"
@@ -161,8 +172,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
         <View style={styles.verifyRow}>
           <Button
-            label={isSendingCode ? 'Sending...' : hasSentCode ? 'Resend Code' : 'Verify Email'}
-            variant="accent"
+            label={isSendingCode ? 'Sending OTP...' : hasSentCode ? 'Resend OTP' : 'Send OTP'}
+            variant="neutral"
             disabled={isSendingCode}
             onPress={sendVerificationCode}
             style={styles.verifyBtn}
@@ -176,17 +187,18 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               <TextInput
                 value={verificationCode}
                 onChangeText={setVerificationCode}
-                placeholder="Enter 6-digit verification code"
+                placeholder="Enter 6-digit OTP"
                 placeholderTextColor="#94a3b8"
                 style={styles.input}
                 keyboardType="number-pad"
                 maxLength={6}
               />
             </View>
+
             <Button
-              label={isVerifyingCode ? 'Verifying...' : 'Confirm Email Verification'}
-              variant="neutral"
-              disabled={isVerifyingCode}
+              label={isVerifyingCode ? 'Verifying OTP...' : isEmailVerified ? 'OTP Verified' : 'Verify OTP'}
+              variant="accent"
+              disabled={isVerifyingCode || isEmailVerified}
               onPress={verifyCode}
             />
           </>
@@ -197,7 +209,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           <TextInput
             value={password}
             onChangeText={setPassword}
-            placeholder="Create your password"
+            placeholder="Enter your password"
             placeholderTextColor="#94a3b8"
             style={styles.input}
             secureTextEntry
@@ -212,13 +224,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         </Pressable>
 
         <Button
-          label={isSigningIn ? 'Signing In...' : isEmailVerified ? 'Sign In' : 'Verify Email To Sign In'}
+          label={isSigningIn ? 'Signing In...' : isEmailVerified ? 'Sign In' : 'Verify OTP To Sign In'}
           variant="accent"
           disabled={!canSignIn || isSigningIn}
           onPress={signIn}
         />
 
-        <Button label="Preview App (Skip Login)" variant="neutral" onPress={previewLogin} />
+        <Button label="Fake Login (Review)" variant="neutral" onPress={fakeLoginForReview} />
 
         <Text style={styles.orText}>Or using other method</Text>
 

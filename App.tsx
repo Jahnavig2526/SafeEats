@@ -2,7 +2,6 @@ import { Feather } from '@expo/vector-icons'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { HealthIntakeScreen } from './src/screens/HealthIntakeScreen'
 import { HomeScreen } from './src/screens/HomeScreen'
 import { LoginScreen } from './src/screens/LoginScreen'
 import { ProfileScreen } from './src/screens/ProfileScreen'
@@ -190,7 +189,7 @@ const tabs: Array<{ key: TabKey; icon: keyof typeof Feather.glyphMap }> = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('home')
-  const [authStep, setAuthStep] = useState<'login' | 'intake' | 'app'>('login')
+  const [authStep, setAuthStep] = useState<'login' | 'app'>('login')
   const [profile, setProfile] = useState<UserIntakeProfile | null>(null)
   const [preferences, setPreferences] = useState<AppPreferences>(defaultPreferences)
   const [preferencesReady, setPreferencesReady] = useState(false)
@@ -285,26 +284,6 @@ export default function App() {
               allergies: [],
               healthIssues: [],
               sensitivity: 'Moderate',
-            })
-            setAuthStep('intake')
-          }}
-        />
-      </View>
-    )
-  }
-
-  if (authStep === 'intake' && profile) {
-    return (
-      <View style={[styles.app, { backgroundColor: theme.background }]}> 
-        <StatusBar style={preferences.theme === 'sand' ? 'dark' : 'light'} />
-        <HealthIntakeScreen
-          userEmail={profile.email}
-          onComplete={({ allergies, healthIssues, sensitivity }) => {
-            setProfile({
-              ...profile,
-              allergies,
-              healthIssues,
-              sensitivity,
             })
             setAuthStep('app')
           }}
