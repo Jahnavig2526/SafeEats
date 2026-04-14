@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { HomeScreen } from './src/screens/HomeScreen'
+import { HealthIntakeScreen } from './src/screens/HealthIntakeScreen'
 import { LoginScreen } from './src/screens/LoginScreen'
 import { ProfileScreen } from './src/screens/ProfileScreen'
 import { RestaurantScreen } from './src/screens/RestaurantScreen'
@@ -189,7 +190,8 @@ const tabs: Array<{ key: TabKey; icon: keyof typeof Feather.glyphMap }> = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('home')
-  const [authStep, setAuthStep] = useState<'login' | 'app'>('login')
+  const [authStep, setAuthStep] = useState<'login' | 'intake' | 'app'>('login')
+  const [pendingEmail, setPendingEmail] = useState('')
   const [profile, setProfile] = useState<UserIntakeProfile | null>(null)
   const [preferences, setPreferences] = useState<AppPreferences>(defaultPreferences)
   const [preferencesReady, setPreferencesReady] = useState(false)
@@ -279,11 +281,26 @@ export default function App() {
         <StatusBar style={preferences.theme === 'sand' ? 'dark' : 'light'} />
         <LoginScreen
           onLogin={(email) => {
+            setPendingEmail(email)
+            setAuthStep('intake')
+          }}
+        />
+      </View>
+    )
+  }
+
+  if (authStep === 'intake') {
+    return (
+      <View style={[styles.app, { backgroundColor: theme.background }]}> 
+        <StatusBar style={preferences.theme === 'sand' ? 'dark' : 'light'} />
+        <HealthIntakeScreen
+          userEmail={pendingEmail}
+          onComplete={({ allergies, healthIssues, sensitivity }) => {
             setProfile({
-              email,
-              allergies: [],
-              healthIssues: [],
-              sensitivity: 'Moderate',
+              email: pendingEmail,
+              allergies,
+              healthIssues,
+              sensitivity,
             })
             setAuthStep('app')
           }}

@@ -123,11 +123,11 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
   }, [theme])
 
   const ingredientApiBaseUrls = useMemo(() => {
-    if (configuredIngredientApiBaseUrl) {
-      return [configuredIngredientApiBaseUrl]
-    }
-
     const candidates: string[] = []
+
+    if (configuredIngredientApiBaseUrl) {
+      candidates.push(configuredIngredientApiBaseUrl.replace(/\/$/, ''))
+    }
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       candidates.push(`http://${window.location.hostname}:8000`)
@@ -139,13 +139,8 @@ export function ScanScreen({ profile, theme }: ScanScreenProps) {
       candidates.push(`http://${hostMatch[1]}:8000`)
     }
 
-    if (!configuredIngredientApiBaseUrl && Platform.OS !== 'web') {
-      candidates.push('http://172.250.18.142:8000')
-    }
-
-    if (!configuredIngredientApiBaseUrl && Platform.OS === 'web' && typeof window !== 'undefined') {
-      candidates.push(`http://${window.location.hostname}:8000`)
-    }
+    candidates.push('http://localhost:8000')
+    candidates.push('http://127.0.0.1:8000')
 
     return Array.from(new Set(candidates))
   }, [configuredIngredientApiBaseUrl])

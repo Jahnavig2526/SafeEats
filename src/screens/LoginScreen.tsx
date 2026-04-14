@@ -12,6 +12,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const authApiBaseUrl = process.env.EXPO_PUBLIC_AUTH_API_BASE_URL?.trim() || 'http://localhost:4000'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [emailVerificationToken, setEmailVerificationToken] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
   const [hasSentCode, setHasSentCode] = useState(false)
   const [isEmailVerified, setIsEmailVerified] = useState(false)
@@ -51,6 +52,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
       setHasSentCode(true)
       setIsEmailVerified(false)
+      setEmailVerificationToken('')
       setVerificationCode('')
 
       if (payload.devOtp) {
@@ -93,17 +95,20 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         body: JSON.stringify({ email: email.trim(), token: verificationCode.trim() }),
       })
 
-      const payload = (await response.json()) as { ok?: boolean; message?: string }
+      const payload = (await response.json()) as { ok?: boolean; message?: string; verificationToken?: string }
       if (!response.ok || !payload.ok) {
         setIsEmailVerified(false)
+        setEmailVerificationToken('')
         setErrorMessage(payload.message || 'OTP verification failed.')
         return
       }
 
       setIsEmailVerified(true)
+      setEmailVerificationToken(payload.verificationToken || '')
       setInfoMessage('Email OTP verified. You can now sign in.')
     } catch {
       setIsEmailVerified(false)
+      setEmailVerificationToken('')
       setErrorMessage('Could not reach auth server. Ensure auth server is running.')
       setInfoMessage('')
     } finally {
@@ -129,11 +134,83 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       return
     }
 
+    if (!emailVerificationToken.trim()) {
+      setErrorMessage('OTP verification token missing. Please verify OTP again.')
+      return
+    }
+
     try {
       setIsSigningIn(true)
       setErrorMessage('')
       setInfoMessage('')
-      onLogin(email.trim())
+
+      const normalizedEmail = email.trim().toLowerCase()
+      const normalizedPassword = password.trim()
+
+      const loginResponse = await fetch(`${authApiBaseUrl}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password: normalizedPassword,
+          verificationToken: emailVerificationToken.trim(),
+        }),
+      })
+
+      const loginPayload = (await loginResponse.json()) as { ok?: boolean; message?: string }
+
+      if (!loginResponse.ok && loginResponse.status === 404) {
+        const registerResponse = await fetch(`${authApiBaseUrl}/auth/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: normalizedPassword,
+            verificationToken: emailVerificationToken.trim(),
+          }),
+        })
+
+        const registerPayload = (await registerResponse.json()) as { ok?: boolean; message?: string }
+        if (!registerResponse.ok || !registerPayload.ok) {
+          setErrorMessage(registerPayload.message || 'Failed to create account.')
+          return
+        }
+
+        const retryLoginResponse = await fetch(`${authApiBaseUrl}/auth/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password: normalizedPassword,
+            verificationToken: emailVerificationToken.trim(),
+          }),
+        })
+
+        const retryPayload = (await retryLoginResponse.json()) as { ok?: boolean; message?: string }
+        if (!retryLoginResponse.ok || !retryPayload.ok) {
+          setErrorMessage(retryPayload.message || 'Login failed after account creation.')
+          return
+        }
+
+        onLogin(normalizedEmail)
+        return
+      }
+
+      if (!loginResponse.ok || !loginPayload.ok) {
+        setErrorMessage(loginPayload.message || 'Login failed.')
+        return
+      }
+
+      onLogin(normalizedEmail)
+      setInfoMessage('Authenticated successfully.')
+    } catch {
+      setErrorMessage('Could not reach auth server. Ensure auth server is running.')
     } finally {
       setIsSigningIn(false)
     }
@@ -159,6 +236,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
             onChangeText={(value) => {
               setEmail(value)
               setIsEmailVerified(false)
+              setEmailVerificationToken('')
               setHasSentCode(false)
               setVerificationCode('')
             }}
